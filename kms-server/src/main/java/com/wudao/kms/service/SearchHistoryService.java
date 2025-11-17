@@ -44,24 +44,6 @@ public class SearchHistoryService extends ServiceImpl<SearchHistoryMapper, Searc
                 log.warn("用户未登录，无法保存搜索历史");
                 return;
             }
-            
-            // 检查是否已存在相同的搜索记录（最近的一条）
-            LambdaQueryWrapper<SearchHistory> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(SearchHistory::getUserId, userId)
-                    .eq(SearchHistory::getContent, content.trim())
-                    .orderByDesc(SearchHistory::getCreateTime)
-                    .last("LIMIT 1");
-            
-            SearchHistory existingRecord = this.getOne(wrapper);
-            
-            // 如果最近的搜索记录就是相同内容，则不重复保存
-            if (existingRecord != null && 
-                existingRecord.getCreateTime().isAfter(LocalDateTime.now().minusMinutes(1))) {
-                log.debug("相同搜索内容在1分钟内已存在，跳过保存");
-                return;
-            }
-
-            // 根据docId获取文档ID列表
 
 
             // 创建新的搜索记录
