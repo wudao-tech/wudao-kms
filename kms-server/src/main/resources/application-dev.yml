@@ -1,0 +1,29 @@
+env:
+  domain: ${ENV_DOMAIN}
+  database-url: ${ENV_DATABASE_URL}
+  database-username: ${ENV_DATABASE_USERNAME}
+  database-password: ${ENV_DATABASE_PASSWORD}
+  database: ${ENV_DATABASE_NAME}
+  redis-host: ${ENV_REDIS_HOST}
+  redis-port: ${ENV_REDIS_PORT}
+  redis-database: ${ENV_REDIS_DATABASE}
+  redis-password: ${ENV_REDIS_PASSWORD}
+  log-level: ${ENV_LOG_LEVEL}
+  mineru-image: ${ENV_MINERU_IMAGE}
+  docker-bind-path: ${ENV_DOCKER_BIND_PATH}
+oss:
+  endpoint: ${OSS_ENDPOINT}
+  access-key: ${OSS_ACCESS_KEY}
+  secret-key: ${OSS_SECRET_KEY}
+  bucket-name: ${OSS_BUCKET_NAME}
+  region: ${OSS_REGION}
+  path-style-access-enabled: ${OSS_PATH_STYLE_ACCESS_ENABLED}
+  static-bucket-name: ${OSS_STATIC_BUCKET_NAME}
+justauth:
+  cache:
+    prefix: 'local::'
+  extend:
+    enum-class: com.wudao.security.model.WdUatAuthSource
+    config:
+      WUDAO:
+        redirect-uri: ${env.domain}/kms/callback?source=wudao

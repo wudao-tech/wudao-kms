@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wudao.kms.mapper.KnowledgeFileSegmentMapper">
+
+    <!-- 全文检索 resultMap -->
+    <resultMap id="KnowledgeSearchResultMap" type="com.wudao.kms.dto.KnowledgeSearchResult">
+        <id property="id" column="id"/>
+        <result property="documentId" column="documentId"/>
+        <result property="content" column="content"/>
+        <result property="createTime" column="createTime"/>
+        <result property="score" column="score"/>
+        <result property="filename" column="filename"/>
+        <result property="s3Url" column="s3Url"/>
+        <result property="createBy" column="createBy"/>
+        <result property="vlContent" column="vlContent"/>
+    </resultMap>
+
+    <!-- 使用PostgreSQL全文搜索进行分词检索（使用预分词字段segment_content_tsv） -->
+    <select id="fulltextSearch" resultMap="KnowledgeSearchResultMap">
+        SELECT
+            t.file_id AS documentId,
+            t.id,
+            t.segment_content AS content,
+            f.created_at as createTime,
+            ts_rank(t.segment_content_tsv, to_tsquery('chinese_zh', #{tokenizedQuery})) AS score,
+            f.file_name AS filename,
+            f.file_path AS s3Url,
+            u.nickname AS createBy,
+            t.vl_content as vlContent
+        FROM knowledge_file_segment t
+        LEFT JOIN knowledge_file f ON t.file_id = f.id
+        LEFT JOIN sys_user u ON f.created_by = u.id
+        WHERE t.delete_flag = false
+          AND t.vector_flag = true
+          AND t.segment_content_tsv @@ to_tsquery('chinese_zh', #{tokenizedQuery})
+        <if test="knowledgeBaseIds != null and knowledgeBaseIds.size() > 0">
+            AND t.knowledge_base_id IN
+            <foreach collection="knowledgeBaseIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="knowledgeSpaceIds != null and knowledgeSpaceIds.size() > 0">
+            AND t.knowledge_space_id IN
+            <foreach collection="knowledgeSpaceIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="documentIds != null and documentIds.size() > 0">
+            AND t.file_id IN
+            <foreach collection="documentIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="fileType != null and fileType != ''">
+            and f.file_type = #{fileType}
+        </if>
+        ORDER BY score DESC
+        LIMIT #{topK}
+    </select>
+    <select id="vectorSearch" resultType="com.wudao.kms.dto.KnowledgeSearchResult">
+            SELECT t.file_id AS documentId,
+            t.id,
+            t.segment_content AS content,
+            f.created_at as createTime,
+            1 - (t.vector &lt;=&gt; #{queryVector}::vector) AS score,
+            f.file_name AS filename,
+            f.file_path AS s3Url,
+            u.nickname AS createBy,
+            t.vl_content as vlContent
+            FROM knowledge_file_segment t
+            LEFT JOIN knowledge_file f ON t.file_id = f.id
+            LEFT JOIN sys_user u ON f.created_by = u.id
+            WHERE t.vector_flag = true
+            AND t.vector IS NOT NULL
+            <if test="knowledgeBaseIds != null and knowledgeBaseIds.size() > 0">
+                AND t.knowledge_base_id IN
+                <foreach collection="knowledgeBaseIds" item="id" open="(" separator="," close=")">
+                    #{id}
+                </foreach>
+            </if>
+            <if test="knowledgeSpaceIds != null and knowledgeSpaceIds.size() > 0">
+                AND t.knowledge_space_id IN
+                <foreach collection="knowledgeSpaceIds" item="id" open="(" separator="," close=")">
+                    #{id}
+                </foreach>
+            </if>
+            <if test="documentIds != null and documentIds.size() > 0">
+                AND t.file_id IN
+                <foreach collection="documentIds" item="id" open="(" separator="," close=")">
+                    #{id}
+                </foreach>
+            </if>
+            <if test="disableKnowledgeIds != null and disableKnowledgeIds.size() > 0">
+                AND t.knowledge_base_id NOT IN
+                <foreach collection="disableKnowledgeIds" item="id" open="(" separator="," close=")">
+                    #{id}
+                </foreach>
+            </if>
+            <if test="fileType != null and fileType != ''">
+                and f.file_type = #{fileType}
+            </if>
+            ORDER BY score DESC
+            LIMIT #{topK}
+    </select>
+
+</mapper>

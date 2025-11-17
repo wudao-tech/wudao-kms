@@ -1,0 +1,154 @@
+env:
+  api-key:
+    dashscope: ${DASHSCOPE_API:}
+    deepseek: ${DEEPSEEK_API:}
+    moonshot: ${MOONSHOT_API:}
+    zhipuai: ${ZHIPUAI_API:}
+    ollama: ${OLLAMA_BASE_URL:}
+    openai:
+      base-url: ${OPENAI_BASE_URL:}
+      completions-path: ${OPENAI_COMPLETIONS_PATH:}
+      api-key: ${OPENAI_API_KEY:}
+basic:
+  name: kms-server
+  version: 3.0.0
+  copyrightYear: 2025
+  profile: /uploadPath
+  external-ip: ${env.external-ip}
+  internal-ip: ${env.internal-ip}
+  domain: ${env.domain}
+  port: ${server.port}
+
+docker:
+  docker-host: unix:///var/run/docker.sock
+  api-version: 1.43
+  registry-url: ${env.registry-url}
+  registry-username: ${env.registry-username}
+  registry-password: ${env.registry-password}
+  readTimeout: 1800000
+
+server:
+  port: 8090
+  servlet:
+    context-path: /kms
+    encoding:
+      charset: utf-8
+      force: true
+  tomcat:
+    uri-encoding: UTF-8
+  compression:
+    enabled: true
+
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}  # 默认激活dev配置
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.deepseek.autoconfigure.DeepSeekChatAutoConfiguration
+      - org.springframework.ai.model.zhipuai.autoconfigure.ZhiPuAiChatAutoConfiguration
+      - org.springframework.ai.model.zhipuai.autoconfigure.ZhiPuAiEmbeddingAutoConfiguration
+      - org.springframework.ai.model.zhipuai.autoconfigure.ZhiPuAiImageAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeChatAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeEmbeddingAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeImageAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeRerankAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAgentAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioSpeechAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioTranscriptionAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeVideoAutoConfiguration
+  datasource:
+    url: jdbc:postgresql://${env.database-url}:5432/${env.database}?currentSchema=public&timezone=Asia/Shanghai
+    username: ${env.database-username}
+    password: ${env.database-password}
+    driver-class-name: org.postgresql.Driver
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+        minimum-idle: 2
+        maximum-pool-size: 4
+        data-source-properties:
+          timezone: Asia/Shanghai
+          stringtype: unspecified
+          useUnicode: true
+          characterEncoding: utf8
+          useSSL: true
+          autoReconnect: true
+          reWriteBatchedInserts: true
+  data:
+    redis:
+      host: ${env.redis-host}
+      port: ${env.redis-port}
+      database: ${env.redis-database}
+      password: ${env.redis-password}
+      ssl.enabled: false
+      timeout: 10s
+      connect-timeout: 5000ms
+      lettuce:
+        pool:
+          min-idle: 2
+          max-idle: 8
+          max-active: 8
+          max-wait: -1ms
+        cluster:
+          refresh:
+            adaptive: true
+            period: 60000
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 500MB
+  mvc:
+    format:
+      date-time: yyyy-MM-dd HH:mm:ss
+      date: yyyy-MM-dd
+      time: HH:mm:ss
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+logging:
+  level:
+    com.wudao: ${env.log-level}
+    org.apache.rocketmq: ${env.log-level}
+    ### org.springframework: ${LOG_LEVEL_SPRING:debug}
+    org.springframework: ${env.log-level}
+    org.springframework.boot.autoconfigure: ${env.log-level}
+    com.wudao.system.mapper: ${env.log-level}
+    org.mybatis.spring.mapper.ClassPathMapperScanner: ${env.log-level}
+    com.baomidou.mybatisplus.core.metadata.TableInfoHelper: ${env.log-level}
+    com.github.yulichang.injector.MPJSqlInjector: ${env.log-level}
+    org.springaicommunity: ${env.log-level}
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-value: true
+      logic-not-delete-value: false
+  configuration:
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  type-handlers-package: com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler
+
+comment:
+  target:
+    knowledge: 0
+
+token:
+  expireTime: 720 #分钟
+  header: Authorization
+  secret: HfkjksFKLJISJFKLFKWJFQFIQWIOFJQOFFQGGSDGFFJIQOEUFIEJFIOQWEFHFQOK5FKOIQWUFFEFE423FIQEOFJHUEWHFKASKDLQWJIFSJDJKFHJIJWO
+# oauth
+justauth:
+  enabled: true
+  cache:
+    type: default
+    prefix: 'local::'
+    timeout: 1h
+  extend:
+    enum-class: com.wudao.security.model.WdAuthSource
+    config:
+      WUDAO:
+        request-class: com.wudao.security.model.AuthWudaoRequest
+        client-id: kms
+        client-secret: 9126fc68991e4d36a03bc2e9db71a53d
+        redirect-uri: ${env.domain}/kms/callback?source=wudao
