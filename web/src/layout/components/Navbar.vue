@@ -10,15 +10,28 @@
       <SidebarTab :header-tab-menu="headerTabMenu" @change-tab="onChangeTab" />
     </div>
     <div class="dp-c">
-       <el-tooltip content="通知" placement="left">
-        <el-badge class="item"  is-dot :hidden="noticeTo.unreadCount === 0 &&  noticeTo.todo === 0">
-          <svg-icon icon-class="notice" class="element ml20 fs20" style="font-size: 16px" @click="openNotice"></svg-icon>
-        </el-badge>
-      </el-tooltip>
-      <el-tooltip content="语言" placement="right">
-        <lang-select id="lang-select" />
-      </el-tooltip>
-      <div style="display: flex; align-items: center; padding-left: 20px; border-left: 1px solid #f5f5f5">
+      <div style="padding: 0 20px;">
+        <el-tooltip content="github" placement="bottom">
+          <svg-icon icon-class="github" class="element ml20 fs20" style="font-size: 16px;" @click="openGithub"></svg-icon>
+        </el-tooltip>
+        <el-tooltip content="gitee" placement="bottom">
+          <svg-icon icon-class="gitee" class="element ml20 fs20" style="font-size: 16px" @click="openGitee"></svg-icon>
+        </el-tooltip>
+      </div>
+      <div style="display: flex; height: 100%; align-items: center; padding: 0 20px; border-left: 1px solid #f5f5f5; border-right: 1px solid #f5f5f5">
+        <el-tooltip content="帮助文档" placement="bottom">
+          <svg-icon icon-class="document" class="element ml20 fs20" style="font-size: 16px" @click="openHelp"></svg-icon>
+        </el-tooltip>
+        <el-tooltip content="通知" placement="bottom">
+          <el-badge class="item"  is-dot :hidden="noticeTo.unreadCount === 0 &&  noticeTo.todo === 0">
+            <svg-icon icon-class="notice" class="element ml20 fs20" style="font-size: 16px" @click="openNotice"></svg-icon>
+          </el-badge>
+        </el-tooltip>
+        <el-tooltip content="语言" placement="right">
+          <lang-select id="lang-select" />
+        </el-tooltip>
+      </div>
+      <div style="display: flex; align-items: center;">
         <el-dropdown ref="drop" trigger="click" :hide-on-click="false">
           <img class="element" style="width: 38px; height: 38px; margin: 0 16px 0 20px; border-radius: 50%" :src="userStore.avatar" alt="" />
           <template #dropdown>
@@ -310,6 +323,18 @@ const logout = async () => {
   document.cookie = 'tenantId=0; path=/; domain=.wudao-tech.com';
   location.href = import.meta.env.VITE_REDIRECT_URL + 'login?redirect_uri=' + import.meta.env.VITE_PLATFORM_URL;
 };
+
+const openGithub = () => {
+  window.open('https://github.com/wudao-tech/wudao-kms');
+}
+
+const openGitee = () => {
+  window.open('https://gitee.com/wudao-tech/wudao-kms');
+}
+
+const openHelp = () => {
+  window.open('https://wudaotech.feishu.cn/wiki/VpBQwzzQYiepO3k7hmEcdlH0n5g');
+}
 
 const openNotice = () => {
   notice.value = true;

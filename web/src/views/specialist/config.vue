@@ -35,9 +35,10 @@
                     </span>
                 </div>
                 
-                <el-button type="primary" @click="handleSubmit" size="small" :disabled="route.query.status === '1'" :loading="submitLoading">
+                <el-button v-if="userId === formData.createdBy" type="primary" @click="handleSubmit" size="small" :disabled="route.query.status === '1'" :loading="submitLoading">
                     {{ submitLoading ? '保存中...' : '保存' }}
                 </el-button>
+                <span v-else style="color: #666666; font-size: 14px;">您只有查看权限</span>
                 <!-- <el-button size="small" type="primary" :loading="submitLoading" @click="handlePublish">发布</el-button> -->
             </div>
         </div>
@@ -465,7 +466,12 @@
                                     <template #label>
                                         <div style="display: flex;">
                                             <span>top-P</span>
-                                            <el-tooltip content="用温度采样的替代方法，称为Nucleus采样，该模型考虑了具有TOP_P概率质量质量的令牌的结果。因此，0.1表示仅考虑包含最高概率质量的令牌。默认为 1" placement="top">
+                                            <el-tooltip  placement="top">
+                                                <template #content>
+                                                    <div style="max-width: 600px; word-wrap: break-word; word-break: break-all; white-space: normal;">
+                                                        <p>用温度采样的替代方法，称为Nucleus采样，该模型考虑了具有TOP_P概率质量质量的令牌的结果。因此，0.1表示仅考虑包含最高概率质量的令牌。默认为 1</p>
+                                                    </div>
+                                                </template>
                                                 <el-icon style="color: #D9D9D9;"><i-ep-question-filled /></el-icon>
                                             </el-tooltip>
                                         </div>
@@ -567,6 +573,7 @@ import { useRoute, useRouter } from 'vue-router'
 const route = useRoute()
 const router = useRouter()
 const workflowOptions = ref([])
+const userId = ref('')
 const chatUrl = ref(import.meta.env.VITE_APP_BASE_API + '/knowledge/chat')
 const formData = ref({
     uuid: '',
@@ -662,6 +669,9 @@ const autoSaveStatus = ref('') // 'saving' | 'saved' | 'failed' | ''
 
 // 自动保存函数 - 复用 handleSubmit 方法
 const performAutoSave = async () => {
+    if (userId.value !== formData.value.createdBy) {
+        return
+    }
     if (isInitialLoad.value || autoSaving.value) {
         return
     }
@@ -718,6 +728,7 @@ const handleWorkflowChange = (value) => {
 
 // 组件挂载时加载知识库
 onMounted(async () => {
+    userId.value = JSON.parse(localStorage.getItem('userInfo')).id
     // 先获取模型列表
     await getModelList()
     await getKnowledgeList()
@@ -1556,5 +1567,7 @@ const getModelList = async () => {
 .selectWidth {
     width: 100%;
 }
+
+
 
 </style> 

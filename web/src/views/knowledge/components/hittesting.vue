@@ -15,13 +15,14 @@
                     type="textarea"
                     :rows="8"
                     ></el-input>
-                    <el-button type="primary" style="position: absolute;right: 10px;bottom: 5px;" :disabled="!queryParams.query" size="small" @click="handleSearch">测试</el-button>
+                    <el-button type="primary" style="position: absolute;right: 10px;bottom: 5px;" :loading="loading" :disabled="!queryParams.query" size="small" @click="handleSearch">测试</el-button>
                 </div>
                 <el-divider content-position="left" style="color: #979797;">测试历史</el-divider>
                 <div style="flex: 1;" class="custom-scrollbar-container">
                     <div class="history-item" :class="{ active: curId === item.id }" v-for="item in testHistory" :key="item.id" @click="handleHistoryClick(item)">
                         <span class="text-ellipsis" style="flex: 1; cursor: pointer;">{{ item.content }}</span>
-                        <el-icon class="delete-icon" style="color: #999; cursor: pointer; margin: 0 10px;" @click.stop="handleDeleteHistory(item.id)"><Delete /></el-icon>
+                        <span>{{ moment(item.createTime).format('MM-DD HH:mm:ss') }}</span>
+                        <el-icon class="delete-icon" style="color: #999; cursor: pointer;" @click.stop="handleDeleteHistory(item.id)"><Delete /></el-icon>
                     </div>
                 </div>
             </div>
@@ -90,6 +91,7 @@ import RetrieveConfig from '@/components/RetrieveConfig.vue'
 import { useRoute } from 'vue-router'
 const { proxy } = getCurrentInstance()
 const { rerank_model } = toRefs(proxy?.useDict('rerank_model'));
+import moment from 'moment'
 const route = useRoute()
 const loading = ref(false)
 
@@ -177,7 +179,7 @@ const handleHistoryClick = (item) => {
     tarFileData.value = item.doc.map(item => item.fileName)
     queryParams.value.documentIds = item.doc.map(item => item.id)
     console.log('tarFileData', tarFileData.value)
-    handleSearch(true) // 传入true表示从历史记录点击触发
+    // handleSearch(true) // 传入true表示从历史记录点击触发
 }
 
 const handleDeleteHistory = (id) => {
@@ -193,6 +195,10 @@ const handleDeleteHistory = (id) => {
 }
 
 const handleSearch = (fromHistory = false) => {
+    if (!queryParams.value.query) {
+        ElMessage.warning('请输入搜索内容')
+        return
+    }
     loading.value = true
     // 如果不是从历史记录点击触发的搜索，才重新设置tarFileData
     if (!fromHistory) {
@@ -201,7 +207,6 @@ const handleSearch = (fromHistory = false) => {
         tarFileData.value = props.knowFileList.filter(item => queryParams.value.documentIds.includes(item.id)).map(item => item.fileName)
     }
     hitTestQuery(queryParams.value).then(res => {
-        loading.value = false
         testResults.value = res.data
         testResults.value.forEach(item => {
             // 先将 <em> 标签替换为 <mark>，然后将所有 <mark> 标签替换为带样式的 <span>
@@ -212,6 +217,11 @@ const handleSearch = (fromHistory = false) => {
                 .replace(/<\/mark>/g, '</span>')
         })
         handleHistory()
+    }).catch(error => {
+        console.error('搜索失败:', error)
+        ElMessage.error('搜索失败，请稍后重试')
+    }).finally(() => {
+        loading.value = false
     })
 }
 
@@ -261,9 +271,25 @@ watch(() => props.knowledgeBaseIds, (newVal) => {
     }
 }, { immediate: true })
 
+// 初始化默认选择所有文件
+const initDocumentIds = () => {
+    if (props.knowFileList && props.knowFileList.length > 0) {
+        queryParams.value.documentIds = props.knowFileList.map(item => item.id)
+    }
+}
+
+// 监听 knowFileList 变化，更新 documentIds
+watch(() => props.knowFileList, (newVal) => {
+    if (newVal && newVal.length > 0 && (!queryParams.value.documentIds || queryParams.value.documentIds.length === 0)) {
+        queryParams.value.documentIds = newVal.map(item => item.id)
+    }
+}, { immediate: true, deep: true })
+
 onMounted(() => {
     queryParams.value.knowledgeIds = [ Number(route.query.id)]
     queryParams.value.knowledgeBaseIds = [props.knowledgeBaseIds]
+    // 初始化默认选择所有文件
+    initDocumentIds()
     console.log(123, queryParams.value)
     handleHistory()
 })
@@ -289,13 +315,21 @@ onMounted(() => {
     display: flex;
     align-items:center;
     .delete-icon {
-        display: none;
+        width: 16px;
+        min-width: 16px;
+        height: 16px;
+        margin: 0 10px;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+        flex-shrink: 0;
     }
     &:hover {
         background: #F2F6FF;
         transform: translateY(-2px);
         .delete-icon {
-            display: block;
+            opacity: 1;
+            visibility: visible;
         }
     }
 }

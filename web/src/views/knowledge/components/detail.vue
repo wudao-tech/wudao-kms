@@ -212,7 +212,7 @@
   </div>
 </template>
 <script setup>
-import { computed } from 'vue'
+import { computed, nextTick } from 'vue'
 import FileUpload from './fileUpload.vue'
 import Permission from './permission.vue'
 import { nanoid } from '@/utils'
@@ -250,22 +250,6 @@ const tabs = computed(() => {
   return ['知识列表', '问答对', '命中测试', '词库设置']
 })
 
-// 获取标签页索引的辅助函数
-const getTabIndex = (tabName) => {
-  if (props.permissionType === 3) {
-    // 只读用户只有两个标签页
-    return tabName === '知识列表' ? 0 : 1
-  } else {
-    // 完整权限用户有四个标签页
-    const tabMap = {
-      '知识列表': 0,
-      '问答对': 1,
-      '命中测试': 2,
-      '词库设置': 3
-    }
-    return tabMap[tabName] || 0
-  }
-}
 const activeTab = ref(0)
 const router = useRouter()
 const route = useRoute()
@@ -320,11 +304,6 @@ const defaultProps = {
   label: 'name',
 }
 
-// 主内容区数据
-const searchText = ref('')
-const selectedFormat = ref('all')
-const selectedState = ref('all')
-
 const handleSearch = () => {
   getFileList()
 }
@@ -340,20 +319,12 @@ const handleClose = () => {
   parentName.value = ''
 }
 const submit = () => {
-  dialogVisible.value = false
-  if (spaceObj.value.id) { 
-    updateKnowledgeSpace(spaceObj.value).then(res => {
-        ElMessage.success('修改成功')
-        handleClose()
-        getTreeData()
-    })
-  } else {
-    createKnowledgeSpace(spaceObj.value).then(res => {
-        ElMessage.success('新增成功')
-        handleClose()
-        getTreeData()
-     })
-  }
+  const api = spaceObj.value.id ? updateKnowledgeSpace : createKnowledgeSpace
+  api(spaceObj.value).then(() => {
+    ElMessage.success(spaceObj.value.id ? '修改成功' : '新增成功')
+    handleClose()
+    getTreeData()
+  })
 }
 
 const handleTabChange = (index) => {
@@ -361,84 +332,62 @@ const handleTabChange = (index) => {
 }
 
 const handleDeleteFile = (data) => {
-  ElMessageBox.confirm(
-    `确定删除${data.fileName}文件吗？`,
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    }
-  ).then(() => {
-    deleteFile(data.id).then(res => {
+  ElMessageBox.confirm(`确定删除${data.fileName}文件吗？`, '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  }).then(() => {
+    deleteFile(data.id).then(() => {
       ElMessage.success('删除成功')
       getFileList()
     })
   })
 }
 
-// 从树形数据中查找指定ID的节点名称
-const findNodeNameById = (nodes, targetId) => {
+// 递归查找树形数据中指定ID的节点（通用函数）
+const findNodeById = (nodes, targetId) => {
   for (const node of nodes) {
-    if (node.id === targetId) {
-      return node.name
-    }
-    if (node.children && node.children.length > 0) {
-      const found = findNodeNameById(node.children, targetId)
-      if (found) {
-        return found
-      }
+    if (node.id === targetId) return node
+    if (node.children?.length) {
+      const found = findNodeById(node.children, targetId)
+      if (found) return found
     }
   }
   return null
 }
 
-const handleAdd = (type,data) => {
-  if(type === 0){
-    spaceObj.value = {
-        name: '',
-        parentId: 0,
-        knowledgeBaseId: props.id
-    }
-    parentName.value = ''
-  }else if(type === 1){
-    spaceObj.value = {
-        name: '',
-        parentId: data.id,
-        knowledgeBaseId: props.id
-    }
-    parentName.value = data.name
-  }else if(type === 2){
-    spaceObj.value = {...data}
-    // 编辑时，如果有父级，需要从树形数据中查找父级名称
-    if (data.parentId && data.parentId !== 0) {
-      const parentNameFound = findNodeNameById(treeData.value, data.parentId)
-      parentName.value = parentNameFound || ''
-    } else {
-      parentName.value = ''
-    }
-  }
+const handleAdd = (type, data) => {
+  const isEdit = type === 2
+  const parentId = type === 0 ? 0 : (type === 1 ? data.id : data.parentId)
+  
+  spaceObj.value = isEdit 
+    ? { ...data } 
+    : { name: '', parentId, knowledgeBaseId: props.id }
+  
+  parentName.value = isEdit 
+    ? (data.parentId && data.parentId !== 0 ? findNodeById(treeData.value, data.parentId)?.name || '' : '')
+    : (type === 1 ? data.name : '')
+  
   dialogVisible.value = true
-  title.value = type === 2 ? '修改文件夹' : '新增文件夹'
+  title.value = isEdit ? '修改文件夹' : '新增文件夹'
 }
 
 const handleDelete = (data) => {
-  ElMessageBox.confirm(
-  `确定删除${data.name}吗？`,
-  {
+  ElMessageBox.confirm(`确定删除${data.name}吗？`, '提示', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
-  }
-).then(() => {
-    deleteKnowledgeSpace(data.id).then(res => {
-        ElMessage.success('删除成功')
-        getTreeData()
+  }).then(() => {
+    deleteKnowledgeSpace(data.id).then(() => {
+      ElMessage.success('删除成功')
+      getTreeData()
     })
   })
 }
 // 事件处理
 const handleNodeClick = (data) => {
   query.value.spaceId = data.id
+  // spaceObj.value = data
   getFileList()
 }
 
@@ -464,21 +413,65 @@ const back = () => {
   getFileList()
 }
 
-const  getTreeData = () => {
-    treeLoading.value = true
-    knowledgeSpaceList(props.id).then(res => {
-        treeData.value = res.data
-        spaceObj.value = res.data[0]
-        // delete spaceObj.value.children
-        nextTick(() => {
-          treeRef.value.setCurrentKey(spaceObj.value.id);
-          // 确保树形结构展开
-          // treeRef.value.expandAll();
-        })
-        query.value.spaceId = spaceObj.value.id
-        getFileList()
-        treeLoading.value = false
+// 查找节点路径（从根到目标节点的所有节点ID）
+const findNodePath = (nodes, targetId, path = []) => {
+  for (const node of nodes) {
+    const currentPath = [...path, node.id]
+    if (node.id === targetId) return currentPath
+    if (node.children?.length) {
+      const found = findNodePath(node.children, targetId, currentPath)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+// 展开树节点路径
+const expandNodePath = (nodeIds) => {
+  if (!treeRef.value?.store?.nodesMap) return
+  nodeIds.forEach(nodeId => {
+    const node = treeRef.value.store.nodesMap[nodeId]
+    if (node?.childNodes?.length && !node.expanded) {
+      node.expand()
+    }
+  })
+}
+
+const getTreeData = () => {
+  treeLoading.value = true
+  knowledgeSpaceList(props.id).then(res => {
+    treeData.value = res.data
+    
+    // 检查路由参数中是否有 spaceId
+    const routeSpaceId = route.query.spaceId
+    const spaceIdNum = routeSpaceId ? (typeof routeSpaceId === 'string' ? parseInt(routeSpaceId) : routeSpaceId) : null
+    const targetNode = spaceIdNum ? findNodeById(res.data, spaceIdNum) : null
+    route.query.tab && handleTabChange(Number(route.query.tab))
+    // 设置目标节点或默认第一个节点
+    spaceObj.value = targetNode || res.data[0]
+    query.value.spaceId = spaceObj.value.id
+    
+    // 设置树节点选中和展开
+    nextTick(() => {
+      nextTick(() => {
+        if (!treeRef.value || !spaceObj.value) return
+        
+        // 展开到目标节点的路径
+        if (targetNode && routeSpaceId) {
+          const expandPath = findNodePath(res.data, spaceObj.value.id)
+          if (expandPath) {
+            expandNodePath(expandPath.slice(0, -1))
+          }
+        }
+        
+        // 设置选中节点
+        treeRef.value.setCurrentKey(spaceObj.value.id)
+      })
     })
+    
+    getFileList()
+    treeLoading.value = false
+  })
 }
 
 const handleSegment = (data) => {
@@ -508,15 +501,8 @@ const handleSegment = (data) => {
 // 获取文件列表
 const getFileList = () => {
   knowledgeSpaceFileList(query.value).then(res => {
-    tableData.value = res.data.map(item => {
-      return {
-        ...item,
-        progress: getProgress(item)
-      }
-    })
+    tableData.value = res.data.map(item => ({ ...item, progress: getProgress(item) }))
     total.value = res.total
-    
-    // 检查是否有未完成的文件
     checkAndStartAutoRefresh()
   })
 }
@@ -527,19 +513,6 @@ const getProgress = (item) => {
   if (!item || !item.knowledgeSegmentConfig || !item.processProgress) {
     return 0
   }
-  
-  // let item = {
-  //   pageCount: 41,
-  //   knowledgeSegmentConfig: {
-  //     qaExtract: false,
-  //     vlFlag: false,
-  //   },
-  //   processProgress: {
-  //     qaFinish: 0,
-  //     vlFinish: 0,
-  //     vectorFinish: 41
-  //   }
-  // }
   // 都是各类型总数
   let qaCount = 0 
   let vlCount = 0
@@ -793,3 +766,4 @@ onBeforeUnmount(() => {
   }
 }
 </style>
+

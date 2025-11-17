@@ -115,6 +115,7 @@
 <script setup>
 import { getQaTable, getQaRecord, addToQa,  editQaImprove, deleteQaImprove, batchAddToQa, importQaImprove, acceptQaImprove } from '@/api/qa'
 import { useRoute } from 'vue-router'
+import templateFile from './answer.xlsx?url'
 const route = useRoute()
 const props = defineProps({
     spaceId: {
@@ -242,13 +243,31 @@ const handleAccept = (row) => {
 }
 // 下载问答对模板
 const downloadTemplate = () => {
-  const link = document.createElement('a')
-  link.href = '/src/views/knowledge/components/answer.xlsx'
-  link.download = '问答对模板.xlsx'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  ElMessage.success('模板下载成功')
+  try {
+    // 使用 fetch 获取文件
+    fetch(templateFile)
+      .then(response => response.blob())
+      .then(blob => {
+        // 创建下载链接
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = '问答对模板.xlsx'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        // 释放 URL 对象
+        window.URL.revokeObjectURL(url)
+        ElMessage.success('模板下载成功')
+      })
+      .catch(error => {
+        console.error('下载模板失败:', error)
+        ElMessage.error('模板下载失败，请稍后重试')
+      })
+  } catch (error) {
+    console.error('下载模板失败:', error)
+    ElMessage.error('模板下载失败，请稍后重试')
+  }
 }
 
 

@@ -108,7 +108,7 @@
                                         删除
                                     </el-dropdown-item>
                                     <!-- （公开状态 || 本人创建） && 未发布状态 -->
-                                    <el-dropdown-item command="config" icon="SetUp" v-if="(item.permission === 1 || item.createdBy === userId) && item.status === 0" @click.stop>配置</el-dropdown-item>
+                                    <el-dropdown-item command="config" icon="SetUp" v-if="(item.permission === 1 || item.createdBy === userId) && item.status === 0" @click.stop>{{item.createdBy === userId ? '配置' : '查看配置'}}</el-dropdown-item>
                                     <!-- 公开状态 || 本人创建 -->
                                     <el-dropdown-item command="copy" icon="CopyDocument" v-if="item.permission === 1 || item.createdBy === userId" @click.stop>复制</el-dropdown-item>
                                     <!-- 未发布状态 && 创建本人 -->

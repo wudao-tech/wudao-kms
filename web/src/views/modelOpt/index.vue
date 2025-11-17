@@ -57,14 +57,7 @@
                 </template>
             </el-table-column>
             <el-table-column prop="provider" label="模型厂商" width="200" />
-            <!-- <el-table-column prop="" label="操作" width="120" >
-                <template #default="{ row}" @click.stop>
-                   <el-tooltip
-                    content="测试"
-                    placement="top"
-                  >
-                    <el-button link icon="Pointer" @click.stop="handleTest(row)"></el-button>
-                  </el-tooltip>
+            <!--
                   <el-tooltip
                     content="编辑"
                     placement="top"
@@ -183,16 +176,6 @@ const handleDelete = (row) => {
         ElMessage.error('删除失败')
     })
    })
-}
-
-const handleTest = (row) => {
-    testModel({
-        id: row.id
-    }).then(res => {
-        ElMessage.success('测试成功')
-    }).catch(() => {
-        ElMessage.error('测试失败')
-    })
 }
 
 const handleEdit = (row) => {

@@ -52,10 +52,10 @@
           </div>
         </div>
         <div class="advanced-settings">
-            <el-icon :size="18" style="cursor: pointer;"><Setting /></el-icon>
+            <!-- <el-icon :size="18" style="cursor: pointer;"><Setting /></el-icon>
             <span @click="openSettings" style="cursor: pointer;">高级设置</span>
             <svg-icon icon-class="retrieve_search" style="margin-left: 10px;color: rgba(0, 0, 0, 0.6); font-size: 14px;" />
-            <span style="color: rgba(0, 0, 0, 0.6);">{{ queryParams.searchType === 'hybrid' ? '混合检索' : queryParams.searchType === 'semantic' ? '语义检索' : '全文检索' }}</span>
+            <span style="color: rgba(0, 0, 0, 0.6);">{{ queryParams.searchType === 'hybrid' ? '混合检索' : queryParams.searchType === 'semantic' ? '语义检索' : '全文检索' }}</span> -->
         </div>
       </div>
 
@@ -182,10 +182,10 @@
           </div>
         </div>
         <div class="advanced-settings">
-          <el-icon :size="18" style="cursor: pointer;"><Setting /></el-icon>
+          <!-- <el-icon :size="18" style="cursor: pointer;"><Setting /></el-icon>
           <span @click="openSettings" style="cursor: pointer;">高级设置</span>
           <svg-icon icon-class="retrieve_search" style="margin-left: 10px;color: rgba(0, 0, 0, 0.6);font-size: 14px;" />
-            <span style="color: rgba(0, 0, 0, 0.6);">{{ queryParams.searchType === 'hybrid' ? '混合检索' : queryParams.searchType === 'semantic' ? '语义检索' : '全文检索' }}</span>
+            <span style="color: rgba(0, 0, 0, 0.6);">{{ queryParams.searchType === 'hybrid' ? '混合检索' : queryParams.searchType === 'semantic' ? '语义检索' : '全文检索' }}</span> -->
         </div>
       </div>
 
@@ -196,7 +196,7 @@
         <div class="filter-group">
           <div class="filter-item">
             <label>文件类型</label>
-            <el-select v-model="filters.fileType" style="width: 150px;" clearable>
+            <el-select v-model="fileType" style="width: 150px;" @change="changeFileType" clearable>
               <el-option value="all" key="all" label="所有"></el-option>
               <el-option value="docx" key="docx" label="docx"></el-option>
               <el-option value="doc" key="doc" label="doc"></el-option>
@@ -251,13 +251,14 @@
 
       <!-- 搜索结果列表 -->
       <div class="results-list custom-scrollbar-container" v-loading="loading">
-        <div v-for="result in searchResults" :key="result.id" class="result-item" :style="{cursor: result.answerType === 'QA' ? 'auto' : 'pointer'}" @click="goDetail(result.document_id, item.answerType)">
+        <div v-for="result in searchResults" :key="result.id" class="result-item">
           
           <div class="result-content">
-            <div class="result-title" v-html="highlightKeyword(result.highlight)"></div>
+            <div style="font-weight: bold; margin-bottom: 5px; font-size: 14px;" v-if="result.answerType === 'QA'">问：{{ result.qaQuestion }}</div>
+            <div class="result-title" v-html="highlightKeyword(result.highlight, result.answerType === 'QA')"></div>
             <div class="result-meta">
-              <div style="display: flex;align-items: center;gap: 50px;">
-                <span>
+              <div  style="display: flex;align-items: center;gap: 50px;">
+                <span class="result-meta-target"  @click="goDetail(result.document_id || 0, result)">
                   <span v-if="result.answerType === 'QA'" style="display: flex;align-items: center;gap: 5px;">
                     <img  src="@/assets/images/qa.png" style="width: 16px;" alt="" />
                     {{ result.knowledgeBaseName }} <el-icon><ArrowRight /></el-icon> {{ result.knowledgeSpaceName }}
@@ -335,15 +336,12 @@ const activeHistoryTab = ref(0)
 const currentSort = ref('relevance')
 const queryParams = ref({
   query: '',
-  rerankModel: 'qwen3-rerank',
   source: 'vector_search',
-  maxSegmentCount: 10,
-  searchType: 'fulltext',
-  ragTopK: 10, //  top k
-  ragScore: 0.3, // 检索分
-  rerankScore: 0.5, // 重排分
-  rerankTopK: 5, // 重排top k
+  searchType: 'hybrid',
+  ragTopK: 999, //  top k
+  ragScore: 0, // 检索分
 })
+const fileType = ref('all')
 const placeholder = ref('搜索知识...')
 const currentPlaceholderIndex = ref(0)
 const placeholderTimer = ref(null)
@@ -351,14 +349,6 @@ const placeholderTimer = ref(null)
 const totalResults = ref(500)
 const activek = ref(0)
 
-const marks = {
-  0: '0',
-  20: '20'
-}
-const marks1 = {
-  0: '0',
-  3000: '3000'
-}
 const handleKnowledgeList = (index) => {
   activek.value = index
   // 切换时不需要 loading，因为数据已经在 latest.value 中
@@ -398,13 +388,9 @@ const latest = ref({})
 
 const showSettings = ref(false)
 const form = ref({  // 高级设置
-    maxSegmentCount: 10,
-    searchType: 'fulltext',
-    rerankModel: 'qwen3-rerank',
-    ragTopK: 10, //  top k
-    ragScore: 0.3, // 检索分
-    rerankScore: 0.5, // 重排分
-    rerankTopK: 5, // 重排top k
+    searchType: 'hybrid',
+    ragTopK: 999, //  top k
+    ragScore: 0, // 检索分
 })
 
 
@@ -414,7 +400,7 @@ const searchSuggestions = ref([])
 
 // 筛选条件
 const filters = ref({
-  fileType: 'all',
+  fileType: '',
   knowledgeBaseIds: [],
   knowledgeId: [],
   updateTime: 'ALL'
@@ -511,7 +497,7 @@ const handleSearchInput = () => {
 }
 
 const sortDirection = ref({
-  relevance: '',
+  relevance: 'descending', // 默认相关度降序排序
   views: '',
   favorites: '',
   comments: '',
@@ -596,12 +582,24 @@ const performSearch = () => {
     showSearchResults.value = true
     showSearchDropdown.value = false
     loading.value = true
+
     
     // 过滤后的参数
     const filteredParams = filterEmptyValues(queryParams.value)
-    
+    // filteredParams.searchType = 'fulltext'
+    // filteredParams.ragTopK = 20
+    filteredParams.userId = JSON.parse(localStorage.getItem('userInfo')).id
     hitTestQuery(filteredParams).then(res => {
       searchResults.value = res.data
+      // 获取搜索结果后，默认按相关度降序排序
+      if (searchResults.value && searchResults.value.length > 0) {
+        // 确保默认排序方向为降序
+        if (!sortDirection.value.relevance) {
+          sortDirection.value.relevance = 'descending'
+        }
+        // 按相关度降序排序
+        searchResults.value.sort((a, b) => b.score - a.score)
+      }
       loading.value = false
     })
 }
@@ -629,34 +627,70 @@ const getFilePath = (fileName) => {
   }
 }
 
-const goDetail = (id, type) => {
-  if (type === 'QA') {
+const changeFileType = () => {
+  filters.value.fileType = fileType.value === 'all' ? '' : fileType.value
+}
+
+const goDetail = (id, item) => {
+  console.log('id', id, item)
+  if (item && item.answerType === 'QA') {
+    // QA也要实现跳转
+    const currentKnow = {
+      from: 'space/retrieve', //跳回来地址
+      type: 3, // 3为知识空间
+      tab: 1,
+      permissionType: item.permissionType, // 权限类型
+      id: item.knowledgeBaseId, // 知识库id
+      name: item.knowledgeBaseName, // 知识库名称
+      spaceId: item.knowledgeSpaceId, // 知识空间id
+      // 保存当前搜索状态
+      fromSearch: showSearchResults.value ? 'true' : 'false',
+      searchQuery: queryParams.value.query,
+      searchType: queryParams.value.searchType,
+      ragTopK: queryParams.value.ragTopK,
+      ragScore: queryParams.value.ragScore,
+      source: queryParams.value.source,
+      // 保存筛选状态
+      fileType: filters.value.fileType,
+      knowledgeBaseIds: JSON.stringify(filters.value.knowledgeBaseIds),
+      knowledgeId: JSON.stringify(filters.value.knowledgeId),
+      updateTime: filters.value.updateTime,
+      // 保存排序状态
+      currentSort: currentSort.value,
+      sortDirection: JSON.stringify(sortDirection.value)
+    }
+    router.push({
+      path: '/space/knowledge',
+      query: currentKnow
+    })
     return
+  } else {
+    // 保存当前搜索状态到路由query中
+    const currentState = {
+      id: id,
+      // 保存搜索状态
+      fromSearch: showSearchResults.value,
+      searchQuery: queryParams.value.query,
+      searchType: queryParams.value.searchType,
+      // maxSegmentCount: queryParams.value.maxSegmentCount,
+      // rerankModel: queryParams.value.rerankModel,
+      source: queryParams.value.source,
+      // 保存筛选状态
+      fileType: filters.value.fileType,
+      knowledgeBaseIds: JSON.stringify(filters.value.knowledgeBaseIds),
+      knowledgeId: JSON.stringify(filters.value.knowledgeId),
+      updateTime: filters.value.updateTime,
+      // 保存排序状态
+      currentSort: currentSort.value,
+      sortDirection: JSON.stringify(sortDirection.value)
+    }
+    
+    router.push({
+      path: '/space/retrieve/detail',
+      query: currentState
+    })
   }
-  // 保存当前搜索状态到路由query中
-  const currentState = {
-    id: id,
-    // 保存搜索状态
-    fromSearch: showSearchResults.value,
-    searchQuery: queryParams.value.query,
-    searchType: queryParams.value.searchType,
-    maxSegmentCount: queryParams.value.maxSegmentCount,
-    rerankModel: queryParams.value.rerankModel,
-    source: queryParams.value.source,
-    // 保存筛选状态
-    fileType: filters.value.fileType,
-    knowledgeBaseIds: JSON.stringify(filters.value.knowledgeBaseIds),
-    knowledgeId: JSON.stringify(filters.value.knowledgeId),
-    updateTime: filters.value.updateTime,
-    // 保存排序状态
-    currentSort: currentSort.value,
-    sortDirection: JSON.stringify(sortDirection.value)
-  }
-  
-  router.push({
-    path: '/space/retrieve/detail',
-    query: currentState
-  })
+ 
 }
 
 let getList = async () => {
@@ -704,6 +738,7 @@ watch(filters.value, (newVal) => {
   console.log('newVal', newVal)
   queryParams.value = {
     ... queryParams.value,
+    fileType: fileType.value === 'all' ? '' : fileType.value,
     ... newVal,
     knowledgeBaseIds: newVal.knowledgeBaseIds != undefined && newVal.knowledgeBaseIds.length > 0 ? [newVal.knowledgeBaseIds[newVal.knowledgeBaseIds.length - 1]] : [],
     knowledgeId: newVal.knowledgeBaseIds != undefined && newVal.knowledgeBaseIds.length > 0 ? [newVal.knowledgeBaseIds[0]] : [] 
@@ -715,40 +750,50 @@ watch(filters.value, (newVal) => {
 const restoreSearchState = () => {
   
   // 检查是否从详情页返回（路由中包含搜索状态参数）
-  if (route.query.fromSearch === 'true') {
+  if (route.query.fromSearch === 'true' || route.query.fromSearch === true || route.query.fromSearch === 'false') {
     console.log('从详情页返回，恢复搜索状态...', route.query)
     
     // 恢复搜索参数
     queryParams.value = {
       query: route.query.searchQuery || '',
-      searchType: route.query.searchType || 'fulltext',
-      maxSegmentCount: parseInt(route.query.maxSegmentCount) || 10,
-      rerankModel: route.query.rerankModel || 'qwen3-rerank',
-      ragTopK: parseInt(route.query.ragTopK) || 10,
-      ragScore: parseFloat(route.query.ragScore) || 0.3,
-      rerankScore: parseFloat(route.query.rerankScore) || 0.5,
-      rerankTopK: parseInt(route.query.rerankTopK) || 10,
+      searchType: route.query.searchType || 'hybrid',
+      // maxSegmentCount: parseInt(route.query.maxSegmentCount) || 10,
+      ragTopK: parseInt(route.query.ragTopK) || 999,  
+      ragScore: parseFloat(route.query.ragScore) || 0,
+      source: route.query.source || 'vector_search'
     }  
     // 恢复筛选状态
     filters.value = {
-      fileType: route.query.fileType || '',
+      fileType: route.query.fileType === 'all' ? '' : (route.query.fileType || ''),
       knowledgeBaseIds: route.query.knowledgeBaseIds ? JSON.parse(route.query.knowledgeBaseIds) : [],
       knowledgeId: route.query.knowledgeId ? JSON.parse(route.query.knowledgeId) : [],
-      updateTime: route.query.updateTime || ''
+      updateTime: route.query.updateTime || 'ALL'
     }
+    
+    // 恢复文件类型筛选
+    fileType.value = filters.value.fileType === '' ? 'all' : filters.value.fileType
     
     // 恢复排序状态
     currentSort.value = route.query.currentSort || 'relevance'
     if (route.query.sortDirection) {
-      sortDirection.value = JSON.parse(route.query.sortDirection)
+      try {
+        sortDirection.value = JSON.parse(route.query.sortDirection)
+      } catch (e) {
+        console.error('解析排序方向失败:', e)
+        sortDirection.value.relevance = 'descending'
+      }
+    } else {
+      // 如果没有保存的排序方向，默认相关度为降序
+      sortDirection.value.relevance = 'descending'
     }
     
     // 恢复搜索结果显示状态
-    showSearchResults.value = true
+    const shouldShowResults = route.query.fromSearch === 'true' || route.query.fromSearch === true
+    showSearchResults.value = shouldShowResults
     currentSearchKeyword.value = queryParams.value.query
     
     // 重新执行搜索以获取结果
-    if (queryParams.value.query) {
+    if (shouldShowResults && queryParams.value.query) {
       performSearch()
     }
     
@@ -785,10 +830,21 @@ onBeforeUnmount(() => {
   stopPlaceholderCarousel()
 })
 
-const highlightKeyword = (text) => {
-  if (!currentSearchKeyword.value || !text) return text;
+const highlightKeyword = (text, isQA = false) => {
+  if (!text) return text;
   
   let result = text;
+  
+  // 如果是 QA 类型，在文本前面加上 '答：'
+  if (isQA) {
+    result = '答：' + result;
+  }
+  
+  // 如果没有搜索关键词，直接返回（但保留 QA 的 '答：' 前缀）
+  if (!currentSearchKeyword.value) {
+    return result;
+  }
+  
   // 第一步：将 <em> 标签替换为 <mark> 标签
   result = result
     .replace(/<em>/g, '<mark>')
@@ -865,7 +921,7 @@ const stopPlaceholderCarousel = () => {
       margin: 20px 0 10px 0;
       
       .advanced-settings {
-        width: 190px;
+        width: 120px;
         display: flex;
         align-items: center;
         gap: 5px;
@@ -990,7 +1046,7 @@ const stopPlaceholderCarousel = () => {
       }
          
       .advanced-settings {
-        width: 190px;
+        width: 120px;
         display: flex;
         align-items: center;
         gap: 5px;
@@ -1056,6 +1112,13 @@ const stopPlaceholderCarousel = () => {
           align-items: center;
           cursor: pointer;
           font-size: 14px;
+          color: #666;
+          transition: color 0.3s;
+          
+          &.active {
+            color: #409eff;
+            font-weight: 600;
+          }
         }
       }
     }
@@ -1276,7 +1339,12 @@ const stopPlaceholderCarousel = () => {
     color: #6B05A8;
     font-weight: 600;
   }
-  
+  .result-meta-target {
+    cursor: pointer;
+    &:hover {
+      color: #409eff;
+    }
+  }
   .result-title .highlight,
   .highlight {
     color: #447DFB;

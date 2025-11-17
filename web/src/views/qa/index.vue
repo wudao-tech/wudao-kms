@@ -455,11 +455,14 @@ const getRecordsList = () => {
 }
 
 const handleExport = () => {
+  let params = {
+    ...queryParams.value,
+    ids: selection.value.map(item => item.id)
+  }
+  console.log('params', params)
     proxy?.download(
       'api/feedback/export',
-      {
-        ...queryParams.value
-      },
+      {...params},
       `问答记录_${new Date().getTime()}.csv`
     );
 }

@@ -161,7 +161,7 @@
           <template #label>
               <div style="display: flex;">
                   <span>图片理解模型</span>
-                  <el-tooltip content="用户理解图片，视频，音频等文件，生成对应文本描述" placement="top" >
+                  <el-tooltip content="用户理解图片，生成对应文本描述" placement="top" >
                   <el-icon style="color: #D2C9C9;"><QuestionFilled /></el-icon>
                   </el-tooltip>
               </div>
@@ -215,6 +215,35 @@
                </template>
             </el-select>
         </el-form-item>
+        <el-form-item label="语音识别模型">
+          <template #label>
+              <div style="display: flex;">
+                  <span>语音识别模型</span>
+                  <el-tooltip content="用户视频，音频等文件，生成对应文本描述" placement="top" >
+                  <el-icon style="color: #D2C9C9;"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+              </div>
+          </template>
+          <el-select v-model="modelForm.audioModel" clearable>
+              <el-option
+                  v-for="item in modelList.filter(item => item.modelType === 'audio_understanding')"
+                  :key="item.model"
+                  :label="item.name"
+                  :value="item.model"
+                  >
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                     <img :src="item.modelIcon" style="width: 30px;" alt="">
+                     <span>{{ item.name }}</span>
+                  </div>
+              </el-option>
+              <template #label="{ label, value }">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                      <img :src="modelList.find(item => item.model === value)?.modelIcon" style="width: 24px;" alt="">
+                      <span>{{ label }}</span>
+                  </div>
+               </template>
+            </el-select>
+        </el-form-item>
         <el-form-item label="权限" prop="permissionType">
           <el-radio-group v-model="modelForm.permissionType" :disabled="modelForm.id !== '' && user.id !== modelForm.createdBy">
             <el-radio :value="1">公开</el-radio>
@@ -237,7 +266,7 @@
         
       </template>
     </el-dialog>
-    <el-dialog v-model="permissionDialogVisible" title="权限申请" width="30%" @close="cancel(permissionFormRef)">
+    <el-dialog v-model="permissionDialogVisible" title="申请权限" width="30%" @close="cancel(permissionFormRef)">
        <el-form ref="permissionFormRef" :model="permissionForm" :rules="rules1" label-width="80px">
         <el-form-item label="权限" prop="targetPermissionType">
           <el-select v-model="permissionForm.targetPermissionType" placeholder="请选择权限">
@@ -321,9 +350,7 @@ const queryParams = ref({
 const spaceName = ref('')
 const tags = ref([])
 const loading = ref(false)
-const search = ref('')
-const selectedTag = ref('all')
-const selectedStatus = ref('all')
+
 const dialogVisible = ref(false)
 const formRef = ref(null)
 const modelForm = ref({
@@ -334,7 +361,8 @@ const modelForm = ref({
   id: '',
   embeddingModel: '',
   multimodalModel: '',
-  textModel: ''
+  textModel: '',
+  audioModel: ''
 })
 
 const permissionType = ref(null)
@@ -343,7 +371,8 @@ const rules = ref({
   name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
   embeddingModel: [{ required: true, message: '请选择索引模型', trigger: 'blur' }],
   multimodalModel: [{ required: true, message: '请选择图片理解模型', trigger: 'blur' }],
-  textModel: [{ required: true, message: '请选择文本理解模型', trigger: 'blur' }]
+  textModel: [{ required: true, message: '请选择文本理解模型', trigger: 'blur' }],
+  audioModel: [{ required: true, message: '请选择语音识别模型', trigger: 'blur' }]
 })
 
 const uploadDialogVisible = ref(false)
@@ -388,7 +417,8 @@ const cancelForm = async (formEl) => {
     id: '',
     embeddingModel: '',
     multimodalModel: '',
-    textModel: ''
+    textModel: '',
+    audioModel: ''
   }
   tagList.value = []
 }
@@ -424,11 +454,34 @@ const handleTag = (val) => {
 }
 
 const back = () => {
-  // 返回首页时清理URL参数
-  const cleanUrl = window.location.pathname;
-  history.pushState({}, '', cleanUrl);
-  type.value = 1
-  getKnowledgeBaseList()
+  // 检查路由参数中是否有 from 地址
+  if (route.query.from === 'space/retrieve') {
+    // 如果有 from 参数，跳回检索页面并恢复状态
+    const searchState = {
+      fromSearch: route.query.fromSearch || 'true',
+      searchQuery: route.query.searchQuery || '',
+      searchType: route.query.searchType || 'hybrid',
+      ragTopK: route.query.ragTopK || 999,
+      ragScore: route.query.ragScore || 0,
+      source: route.query.source || 'vector_search',
+      fileType: route.query.fileType || '',
+      knowledgeBaseIds: route.query.knowledgeBaseIds || '[]',
+      knowledgeId: route.query.knowledgeId || '[]',
+      updateTime: route.query.updateTime || 'ALL',
+      currentSort: route.query.currentSort || 'relevance',
+      sortDirection: route.query.sortDirection || JSON.stringify({ relevance: 'descending' })
+    }
+    router.push({
+      path: '/space/retrieve',
+      query: searchState
+    })
+  } else {
+    // 返回首页时清理URL参数
+    const cleanUrl = window.location.pathname;
+    history.pushState({}, '', cleanUrl);
+    type.value = 1
+    getKnowledgeBaseList()
+  }
 }
 
 const cancel = async (formEl) => {

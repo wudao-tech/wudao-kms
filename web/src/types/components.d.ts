@@ -20,7 +20,6 @@ declare module 'vue' {
     Day: typeof import('./../components/Crontab/day.vue')['default']
     DictTag: typeof import('./../components/DictTag/index.vue')['default']
     Editor: typeof import('./../components/Editor/index.vue')['default']
-    ElAutocomplete: typeof import('element-plus/es')['ElAutocomplete']
     ElBadge: typeof import('element-plus/es')['ElBadge']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElButtonGroup: typeof import('element-plus/es')['ElButtonGroup']

@@ -8,10 +8,6 @@ import { errorCode } from '@/utils/errorCode';
 import { LoadingInstance } from 'element-plus/es/components/loading/src/loading';
 import FileSaver from 'file-saver';
 import { getLanguage } from '@/lang';
-import { encryptBase64, encryptWithAes, generateAesKey, decryptWithAes, decryptBase64 } from '@/utils/crypto';
-import { encrypt, decrypt } from '@/utils/jsencrypt';
-
-const encryptHeader = 'encrypt-key';
 let downloadLoadingInstance: LoadingInstance;
 // 是否显示重新登录
 export const isRelogin = { show: false };
@@ -47,8 +43,6 @@ serviceInstance.interceptors.request.use(
     const isToken = config.headers?.isToken === false;
     // 是否需要防止数据重复提交
     const isRepeatSubmit = config.headers?.repeatSubmit === false;
-    // 是否需要加密
-    const isEncrypt = config.headers?.isEncrypt === 'true';
     if (getToken() && !isToken) {
       config.headers['Authorization'] = 'Bearer ' + getToken(); // 让每个请求携带自定义token 请根据实际情况自行修改
     }
@@ -96,15 +90,6 @@ serviceInstance.interceptors.request.use(
         }
       }
     }
-    if (import.meta.env.VITE_APP_ENCRYPT === 'true') {
-      // 当开启参数加密
-      if (isEncrypt && (config.method === 'post' || config.method === 'put')) {
-        // 生成一个 AES 密钥
-        const aesKey = generateAesKey();
-        config.headers[encryptHeader] = encrypt(encryptBase64(aesKey));
-        config.data = typeof config.data === 'object' ? encryptWithAes(JSON.stringify(config.data), aesKey) : encryptWithAes(config.data, aesKey);
-      }
-    }
     // FormData数据去请求头Content-Type
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type'];
@@ -119,22 +104,6 @@ serviceInstance.interceptors.request.use(
 serviceInstance.interceptors.response.use(
   (res: AxiosResponse) => {
 
-    if (import.meta.env.VITE_APP_ENCRYPT === 'true') {
-      // 加密后的 AES 秘钥
-      const keyStr = res.headers[encryptHeader];
-      // 加密
-      if (keyStr != null && keyStr != '') {
-        const data = res.data;
-        // 请求体 AES 解密
-        const base64Str = decrypt(keyStr);
-        // base64 解码 得到请求头的 AES 秘钥
-        const aesKey = decryptBase64(base64Str.toString());
-        // aesKey 解码 data
-        const decryptData = decryptWithAes(data, aesKey);
-        // 将结果 (得到的是 JSON 字符串) 转为 JSON
-        res.data = JSON.parse(decryptData);
-      }
-    }
     // 未设置状态码则默认成功状态
     const code = res.data.code || HttpStatus.SUCCESS;
     const msg = errorCode[code] || res.data.msg || errorCode['default'];
@@ -218,12 +187,7 @@ export function download(url: string, params: any, fileName: string) {
   downloadLoadingInstance = ElLoading.service({ text: '正在下载数据，请稍候', background: 'rgba(0, 0, 0, 0.7)' });
   // prettier-ignore
   return service.post(url, params, {
-      transformRequest: [
-        (params: any) => {
-          return tansParams(params);
-        }
-      ],
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 'Content-Type': 'application/json' },
       responseType: 'blob'
     }).then(async (resp: any) => {
       const isLogin = blobValidate(resp);
