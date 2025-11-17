@@ -1,0 +1,378 @@
+@import './variables.module.scss';
+@import './mixin.scss';
+@import './transition.scss';
+@import './element-ui.scss';
+@import './sidebar.scss';
+@import './btn.scss';
+@import './ruoyi.scss';
+@import 'animate.css';
+@import 'element-plus/dist/index.css';
+
+body {
+  height: 100%;
+  margin: 0;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background: white !important;
+  color: #333 !important;
+  font-family:
+    Helvetica Neue,
+    Helvetica,
+    PingFang SC,
+    Hiragino Sans GB,
+    Microsoft YaHei,
+    Arial,
+    sans-serif;
+}
+
+label {
+  font-weight: 700;
+}
+
+html {
+  height: 100%;
+  box-sizing: border-box;
+}
+
+html.dark .svg-icon,
+html.dark svg {
+  fill: var(--el-text-color-regular);
+}
+
+#app {
+  height: 100%;
+}
+
+*,
+*:before,
+*:after {
+  box-sizing: inherit;
+}
+
+.no-padding {
+  padding: 0px !important;
+}
+
+.padding-content {
+  padding: 4px 0;
+}
+
+a:focus,
+a:active {
+  outline: none;
+}
+
+a,
+a:focus,
+a:hover {
+  cursor: pointer;
+  color: inherit;
+  text-decoration: none;
+}
+
+div:focus {
+  outline: none;
+}
+
+.fr {
+  float: right;
+}
+
+.fl {
+  float: left;
+}
+
+.p-15 {
+  padding: 15px;
+}
+
+.p-card {
+  padding: 10px 20px;
+  background-color: #fff;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.pr-5 {
+  padding-right: 5px;
+}
+
+.pl-5 {
+  padding-left: 5px;
+}
+
+.block {
+  display: block;
+}
+
+.pointer {
+  cursor: pointer;
+}
+
+.inlineBlock {
+  display: block;
+}
+
+.clearfix {
+  &:after {
+    visibility: hidden;
+    display: block;
+    font-size: 0;
+    content: ' ';
+    clear: both;
+    height: 0;
+  }
+}
+
+.text-el {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+aside {
+  background: #eef1f6;
+  padding: 8px 24px;
+  margin-bottom: 20px;
+  border-radius: 2px;
+  display: block;
+  line-height: 32px;
+  font-size: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  color: #2c3e50;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  a {
+    color: #337ab7;
+    cursor: pointer;
+
+    &:hover {
+      color: rgb(32, 160, 255);
+    }
+  }
+}
+
+//main-container全局样式
+.app-container {
+  padding: 20px;
+}
+
+// search面板样式
+.panel,
+.search {
+  margin-bottom: 0.75rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--el-border-color-light);
+  background-color: var(--el-bg-color-overlay);
+  padding: 0.75rem;
+  transition: all ease 0.3s;
+
+  &:hover {
+    box-shadow: 0 2px 12px #0000001a;
+    transition: all ease 0.3s;
+  }
+}
+
+.components-container {
+  margin: 30px 50px;
+  position: relative;
+}
+
+.pagination-container {
+  margin-top: 0;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.sub-navbar {
+  height: 50px;
+  line-height: 50px;
+  position: relative;
+  width: 100%;
+  text-align: right;
+  padding-right: 20px;
+  transition: 600ms ease position;
+  background: linear-gradient(90deg, rgba(32, 182, 249, 1) 0%, rgba(32, 182, 249, 1) 0%, rgba(33, 120, 241, 1) 100%, rgba(33, 120, 241, 1) 100%);
+
+  .subtitle {
+    font-size: 20px;
+    color: #fff;
+  }
+
+  &.draft {
+    background: #d0d0d0;
+  }
+
+  &.deleted {
+    background: #d0d0d0;
+  }
+}
+
+.link-type,
+.link-type:focus {
+  color: #337ab7;
+  cursor: pointer;
+
+  &:hover {
+    color: rgb(32, 160, 255);
+  }
+}
+
+.filter-container {
+  padding-bottom: 10px;
+
+  .filter-item {
+    display: inline-block;
+    vertical-align: middle;
+    margin-bottom: 10px;
+  }
+}
+
+:root {
+  color-scheme: light;
+//   --el-color-primary: #6B05A8 !important;
+//   --el-button-hover-link-text-color: #6B05A8 !important; //link按钮悬浮色
+//   --el-border-radius-base: 4px !important;
+//   --el-menu-item-height: 48px !important;
+//   --el-menu-sub-item-height: 48px !important;
+}
+
+// .el-button:hover {
+//   background-color: #fff !important;
+//   border-color: #dcdfe6 !important;
+// }
+// .el-button.is-link:hover {
+//   border-color: #fff !important;
+// }
+
+
+// .el-button--primary {
+//   color: #fff !important;
+//   background-color: #6B05A8 !important;
+//   border-color: #6B05A8 !important;
+// }
+
+// .el-button--primary:hover  {
+//   background-color: #ae85c7 !important;
+//   border-color: #ae85c7 !important;
+// }
+
+.u-title {
+  position: relative;
+  padding-left: .625em;
+  font-weight: bold;
+  line-height: 1.4;
+
+  &::before {
+    content: '';
+    position: absolute;
+    width: .125em;
+    height: 1em;
+    left: 0;
+    top: .2em;
+    background: #6B05A8;
+  }
+}
+
+.oneline {
+  white-space: nowrap; //强制文本在一行内输出
+  overflow: hidden; //隐藏溢出部分
+  text-overflow: ellipsis; //对溢出部分加上...
+}
+
+.two-lines {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+}
+
+.right-assistant {
+  width: 30%;
+  height: 100%;
+  background: #fff;  
+  position: relative;
+  margin-left: 20px;
+  transition: all 0.3s ease;
+  .assistant-content {
+    // padding: 24px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 20px; 
+  }
+  &.collapsed {
+    width: 20px;   
+    .assistant-content {
+      display: none;
+    }
+  }
+}
+.assistant-toggle {
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 40px;
+  background: white;
+  box-shadow: 4px 0 8px #070c141f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    border-width: 5px;
+    border-style: solid;
+    bottom: -10px;
+    border-color: #fff #fff transparent transparent;
+  }
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    border-width: 5px;
+    border-style: solid;
+    top: -10px;
+    border-color: transparent #fff #fff transparent;
+  }
+}
+
+.custom-scrollbar-container {
+  overflow-y: auto;
+  /* 始终保留滚动条空间 */
+  scrollbar-gutter: stable;
+  /* 隐藏滚动条 */
+  /* 隐藏滚动条（Firefox） */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.custom-scrollbar-container::-webkit-scrollbar {
+  width: 8px; /* 设置滚动条宽度，保持空间 */
+  background: transparent; /* 背景透明 */
+}
+
+.custom-scrollbar-container::-webkit-scrollbar-thumb {
+  background: transparent; /* 滑块透明 */
+  border-radius: 4px;
+}
+
+.custom-scrollbar-container:hover {
+  scrollbar-color: #c1c1c1 transparent; /* Firefox */
+}
+
+.custom-scrollbar-container:hover::-webkit-scrollbar-thumb {
+  background: #c1c1c1; /* 显示滑块 */
+  transition: background 0.3s ease; /* 添加过渡效果 */
+}

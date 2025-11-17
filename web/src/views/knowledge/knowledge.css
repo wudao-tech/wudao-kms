@@ -1,0 +1,791 @@
+.file-upload-container {
+  width: 100%;
+  min-height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.main-content {
+  padding: 20px;
+  display: flex;
+  height: calc(100vh - 40px);
+  flex-direction: column;
+}
+
+.steps-container {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  height: 160px;
+  background-color: #fff;
+  padding: 10px 20px;
+  flex-shrink: 0;
+}
+
+.steps-container :deep(.el-steps) {
+  display: flex;
+  align-items: end;
+  width: 70%;
+}
+
+.steps-container :deep(.el-steps) .el-step__head .el-step__icon {
+  background: transparent;
+  border: none;
+  width: 48px;
+}
+
+.steps-container :deep(.el-steps) .el-step__main {
+  margin-top: 10px;
+}
+
+.steps-container :deep(.el-steps) .el-step__main .el-step__title {
+  font-size: 14px;
+  font-weight: normal;
+}
+
+.steps-container :deep(.el-steps) .el-step__line {
+  background: #3170F6;
+}
+
+.steps-container .step-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #9AC3FF 20%, #BB56FE 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.steps-container .step-icon .el-icon {
+  font-size: 20px;
+  color: #909399;
+}
+
+.steps-container .step-title {
+  margin-top: 8px;
+  font-size: 14px;
+  color: #303133;
+}
+
+.steps-container :deep(.el-step.is-process) .step-icon {
+  background: #409eff;
+}
+
+.steps-container :deep(.el-step.is-process) .step-icon .el-icon {
+  color: #fff;
+}
+
+.steps-container :deep(.el-step.is-finish) .step-icon {
+  background: #67c23a;
+}
+
+.steps-container :deep(.el-step.is-finish) .step-icon .el-icon {
+  color: #fff;
+}
+
+.step-number {
+  color: #303133;
+  width: 24px;
+  height: 24px;
+  background-color: #409EFF;
+  border-radius: 50%;
+  color: #fff;
+  display: inline-block;
+  text-align: center;
+  line-height: 24px;
+}
+
+.content-area {
+  background: #fff;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.upload-step {
+  padding: 20px;
+}
+
+.upload-step .upload-area {
+  margin-bottom: 30px;
+}
+
+.upload-step .upload-area :deep(.el-upload-dragger) {
+  width: 100%;
+  height: 130px;
+  padding: 10px;
+  background: #fafbfc;
+  border: 1px dashed #c0c4cc;
+  border-radius: 8px;
+}
+
+.upload-step .upload-area :deep(.el-upload-dragger) .el-icon--upload {
+  font-size: 40px;
+  color: #c0c4cc;
+}
+
+.upload-step .upload-area :deep(.el-upload-dragger) .el-upload__text {
+  font-size: 16px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.upload-step .upload-area :deep(.el-upload-dragger) .upload-tip {
+  font-size: 12px;
+  color: #909399;
+}
+
+.upload-step .upload-area :deep(.el-upload-dragger):hover {
+  border-color: #409eff;
+}
+
+.upload-step .url-input-container {
+  position: relative;
+}
+
+.upload-step .url-input-container .url-input {
+  width: 100%;
+}
+
+.upload-step .url-input-container .url-submit-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 10;
+  width: 100px;
+}
+
+.upload-step .file-list {
+  margin-bottom: 30px;
+}
+
+.upload-step .file-list .file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.upload-step .file-list .file-item .file-icon {
+  font-size: 16px;
+}
+
+.upload-step .file-list .file-item .file-name {
+  flex: 1;
+  font-size: 14px;
+  color: #303133;
+}
+
+.upload-step .file-list .file-item .file-size {
+  font-size: 12px;
+  color: #909399;
+}
+
+.upload-step .uploaded-files-table .file-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-step .uploaded-files-table .file-cell .file-icon {
+  color: #67c23a;
+}
+
+.segment-step {
+  margin: 0 auto;
+  width: 100%;
+  height: 100%;
+}
+
+.segment-step .segment-step-item {
+  flex: 1;
+  padding: 20px 40px;
+  border-right: 1px solid #EEEEEE;
+  height: 100%;
+}
+
+.segment-step .segment-options .segment-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.segment-step .segment-options .segment-radio-group .radio-option {
+  padding: 12px 20px;
+  transition: all 0.3s;
+  border: 1px solid #EEEEEE;
+  width: 100%;
+}
+
+.segment-step .segment-options .segment-radio-group .radio-option :deep(.el-radio) {
+  width: 100%;
+}
+
+.segment-step :deep(.el-radio__label) {
+  width: 100%;
+  padding-left: 20px;
+}
+
+.segment-step :deep(.el-checkbox__label) {
+  width: 100%;
+  padding-left: 20px;
+}
+
+.segment-step .custom-segment-config {
+  border: 1px solid #EEEEEE;
+  border-top: none;
+  padding: 0 20px 20px;
+}
+
+.segment-step .custom-segment-config .config-section .section-label {
+  font-size: 14px;
+}
+
+.segment-step .custom-segment-config .config-section .section-description {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 16px;
+}
+
+.segment-step .custom-segment-config .config-section .segment-methods {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.segment-step .custom-segment-config .config-section .segment-methods .segment-tag {
+  cursor: pointer;
+}
+
+.segment-step .custom-segment-config .config-section .segment-methods .segment-tag.add-tag {
+  background: #f5f7fa;
+  border: 1px dashed #c0c4cc;
+}
+
+.segment-step .custom-segment-config .config-section .segment-methods .custom-input {
+  width: 200px;
+}
+
+.segment-step .custom-segment-config .config-section .config-input {
+  margin-left: 20px;
+  flex: 1;
+}
+
+:deep(.el-slider__marks-text) {
+  margin-top: 5px;
+}
+
+.edit-placeholder,
+.submit-placeholder {
+  text-align: center;
+  padding: 80px 20px;
+  color: #909399;
+}
+
+.edit-placeholder p,
+.submit-placeholder p {
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.bottom-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 10px;
+}
+
+.bottom-actions .el-button {
+  min-width: 100px;
+}
+
+.edit-step {
+  height: 100%;
+  display: flex;
+  font-size: 14px;
+  overflow: hidden;
+}
+
+.edit-step .edit-step-left {
+  min-width: 200px;
+  padding: 10px;
+  border-right: 1px solid #D9D9D9;
+}
+
+.edit-step .edit-step-center {
+  min-width: calc(50% - 100px);
+}
+
+.edit-step .edit-step-right {
+  min-width: calc(50% - 100px);
+}
+
+.edit-step .step-active {
+  background-color: #f8f5fa;
+}
+
+.text-editor-container {
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.text-editor-container :deep(.w-e-text-container) {
+  min-height: 400px !important;
+}
+
+.text-editor-container :deep(.w-e-toolbar) {
+  border-bottom: 1px solid #dcdfe6 !important;
+}
+
+.table-editor-container {
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.table-editor-container #univer {
+  border: none !important;
+}
+
+:deep(.el-progress) {
+  height: 30px !important;
+  border-radius: 0;
+}
+
+:deep(.el-progress) .el-progress-bar__inner {
+  border-radius: 0;
+}
+
+:deep(.el-progress) .el-progress-bar__innerText {
+  width: 100%;
+  padding: 0 10px;
+}
+
+:deep(.el-upload-list) {
+  display: none;
+}
+
+.file-preview-container {
+  height: 100%;
+  padding: 16px;
+  overflow: auto;
+}
+
+.file-preview-container .preview-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 14px;
+  color: #909399;
+}
+
+.file-preview-container .pdf-preview {
+  width: 100%;
+  max-height: 100%;
+}
+
+.file-preview-container .pdf-preview :deep(canvas) {
+  max-width: 100%;
+  height: auto;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 16px;
+}
+
+.file-preview-container .docx-preview {
+  background: white;
+  padding: 20px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.file-preview-container .docx-preview :deep(.docx-wrapper) {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.6;
+}
+
+.file-preview-container .docx-preview :deep(.docx-wrapper) p {
+  margin-bottom: 12px;
+}
+
+.file-preview-container .docx-preview :deep(.docx-wrapper) h1, .file-preview-container .docx-preview :deep(.docx-wrapper) h2, .file-preview-container .docx-preview :deep(.docx-wrapper) h3, .file-preview-container .docx-preview :deep(.docx-wrapper) h4, .file-preview-container .docx-preview :deep(.docx-wrapper) h5, .file-preview-container .docx-preview :deep(.docx-wrapper) h6 {
+  margin-top: 20px;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.file-preview-container .docx-preview :deep(.docx-wrapper) table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 16px 0;
+}
+
+.file-preview-container .docx-preview :deep(.docx-wrapper) table td, .file-preview-container .docx-preview :deep(.docx-wrapper) table th {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.file-preview-container .markdown-preview {
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: auto;
+}
+
+.file-preview-container .text-preview {
+  background: white;
+  padding: 20px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  height: calc(100% - 32px);
+  overflow: auto;
+}
+
+.file-preview-container .text-preview pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.file-preview-container .image-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.file-preview-container .image-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.file-preview-container .unsupported-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  text-align: center;
+  color: #909399;
+}
+
+.file-preview-container .unsupported-preview p {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.no-file-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+}
+
+.segments-container .segments-list {
+  padding: 16px;
+}
+
+.segments-container .segments-list .segment-item {
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.segments-container .segments-list .segment-item:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.segments-container .segments-list .segment-item.segment-active {
+  border: 2px solid #409eff;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+}
+
+.segments-container .segments-list .segment-item .segment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.segments-container .segments-list .segment-item .segment-header .segment-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.segments-container .segments-list .segment-item .segment-header .segment-info .segment-index {
+  font-weight: 600;
+  color: #303133;
+}
+
+.segments-container .segments-list .segment-item .segment-header .segment-info .segment-type {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.segments-container .segments-list .segment-item .segment-header .segment-info .segment-type.type-heading {
+  background: #e1f3ff;
+  color: #0066cc;
+}
+
+.segments-container .segments-list .segment-item .segment-header .segment-info .segment-type.type-paragraph {
+  background: #f0f9ff;
+  color: #1890ff;
+}
+
+.segments-container .segments-list .segment-item .segment-header .segment-info .segment-type.type-list {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.segments-container .segments-list .segment-item .segment-header .segment-info .segment-type.type-code {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.segments-container .segments-list .segment-item .segment-header .segment-info .segment-length {
+  font-size: 12px;
+  color: #909399;
+}
+
+.segments-container .segments-list .segment-item .segment-header .segment-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.segments-container .segments-list .segment-item .segment-editor {
+  padding: 16px;
+}
+
+.segments-container .segments-list .segment-item .segment-editor .editor-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.segments-container .segments-list .segment-item .segment-content {
+  padding: 16px;
+}
+
+.segments-container .segments-list .segment-item .segment-content .heading-content :deep(h1) {
+  font-size: 24px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 8px 0;
+}
+
+.segments-container .segments-list .segment-item .segment-content .heading-content :deep(h2) {
+  font-size: 20px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 8px 0;
+}
+
+.segments-container .segments-list .segment-item .segment-content .heading-content :deep(h3) {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 8px 0;
+}
+
+.segments-container .segments-list .segment-item .segment-content .paragraph-content {
+  line-height: 1.6;
+  color: #606266;
+}
+
+.segments-container .segments-list .segment-item .segment-content .paragraph-content :deep(strong) {
+  font-weight: 600;
+  color: #303133;
+}
+
+.segments-container .segments-list .segment-item .segment-content .paragraph-content :deep(em) {
+  font-style: italic;
+  color: #909399;
+}
+
+.segments-container .segments-list .segment-item .segment-content .paragraph-content :deep(ul) {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.segments-container .segments-list .segment-item .segment-content .paragraph-content :deep(ul) li {
+  margin: 4px 0;
+}
+
+.segments-container .segments-list .add-segment-btn {
+  margin-top: 16px;
+}
+
+.segments-container .segments-list .add-segment-btn :deep(.el-button) {
+  border: 2px dashed #dcdfe6;
+  color: #909399;
+}
+
+.segments-container .segments-list .add-segment-btn :deep(.el-button):hover {
+  border-color: #409eff;
+  color: #409eff;
+}
+
+.segments-container .no-segments {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  text-align: center;
+}
+
+.parsed-content-container .parsed-segments-list {
+  padding: 16px;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item {
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item.segment-active {
+  border: 2px solid #409eff;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-header .segment-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-header .segment-info .segment-index {
+  font-weight: 600;
+  color: #303133;
+  font-size: 14px;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-header .segment-info .segment-type {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-header .segment-info .segment-type.type-text {
+  background: #f0f9ff;
+  color: #1890ff;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-header .segment-info .segment-type.type-image {
+  background: #fff2e8;
+  color: #fa541c;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-header .segment-info .segment-type.type-table {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-header .segment-info .segment-type.type-heading {
+  background: #e1f3ff;
+  color: #0066cc;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-header .segment-info .segment-type.type-list {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-header .segment-info .segment-length {
+  font-size: 12px;
+  color: #909399;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-content {
+  padding: 16px;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-content .text-content {
+  line-height: 1.6;
+  color: #606266;
+  font-size: 14px;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-content .text-content pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: inherit;
+  margin: 0;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-content .image-content {
+  text-align: center;
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-content .image-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.parsed-content-container .parsed-segments-list .parsed-segment-item .segment-content .image-content p {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #909399;
+  text-align: center;
+}
+
+.parsed-content-container .no-parsed-segments {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+}
+
+.parsed-content-container .no-parsed-segments p {
+  margin: 8px 0;
+}
+
+.radio-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.radio-description {
+  font-size: 14px;
+  color: #909399;
+}

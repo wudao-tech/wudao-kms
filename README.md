@@ -4,12 +4,14 @@
 
 # 物道知识库管理系统
 
-**基于 Spring Boot 的企业级知识库管理与 AI 对话系统**
+**基于 Spring Boot + Vue 3 的企业级知识库管理与 AI 对话系统**
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue.svg)](https://www.postgresql.org/)
+[![Vue](https://img.shields.io/badge/Vue-3.4-42b883.svg)](https://vuejs.org/)
+[![Element Plus](https://img.shields.io/badge/Element%20Plus-2.9-409EFF.svg)](https://element-plus.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791.svg)](https://www.postgresql.org/)
 
 [功能特性](#功能特性) • [快速开始](#快速开始) • [技术栈](#技术栈) • [文档](#文档) • [贡献指南](#贡献指南)
 
@@ -28,8 +30,11 @@
 - 🔍 **混合检索**：支持语义检索、全文检索、混合检索三种模式，配合 Rerank 重排算法
 - 💬 **RAG 对话**：基于知识库的智能问答，流式响应，引用溯源
 - 🎯 **AI 助手**：可配置的智能助手，支持自定义提示词、知识库绑定、快捷指令
+- 🎨 **现代化前端**：Vue 3 + TypeScript + Element Plus，支持工作流设计、数据可视化、富文本编辑
+- 📊 **可视化工作流**：集成 BPMN-JS 流程设计器，支持复杂业务流程建模
 - 🔐 **权限管理**：细粒度的知识库访问控制和分享机制
 - 🐳 **容器化部署**：完整的 Docker Compose 一键部署方案
+- 🌍 **国际化支持**：中英文双语切换
 
 ---
 
@@ -134,9 +139,21 @@
 - **对象存储**：MinIO / 阿里云 OSS
 - **构建工具**：Maven
 
-### 前端技术（需单独部署）
+### 前端技术
 
-- 前端项目请参考配套的前端仓库
+- **核心框架**：Vue 3.4.34 + TypeScript 5.4.5
+- **构建工具**：Vite 5.2.12
+- **UI 组件库**：Element Plus 2.9.0
+- **状态管理**：Pinia 2.1.7
+- **路由管理**：Vue Router 4.3.2
+- **HTTP 客户端**：Axios 1.6.8
+- **CSS 引擎**：UnoCSS 0.58.6
+- **可视化**：ECharts 5.5.0、AntV X6 2.18.1
+- **工作流**：BPMN-JS 16.4.0
+- **富文本编辑器**：WangEditor 5.1.23、Mavon-Editor、CodeMirror
+- **文件处理**：XLSX、docx-preview、vue-pdf-embed
+- **微前端**：Qiankun 2.10.16
+- **国际化**：Vue I18n 9.10.2
 
 ---
 
@@ -144,12 +161,20 @@
 
 ### 环境要求
 
+#### 后端环境
+
 - **Java**：JDK 21+
 - **数据库**：PostgreSQL 17+
 - **缓存**：Redis 7+
 - **存储**：MinIO 或阿里云 OSS
+- **构建工具**：Maven 3.6+
 - **容器**：Docker 和 Docker Compose（可选）
 - **GPU**：NVIDIA GPU（可选，用于 MinerU 增强解析）
+
+#### 前端环境
+
+- **Node.js**：>= 16.0.0（推荐 18.x 或 20.x）
+- **包管理器**：npm >= 8.0.0 或 pnpm >= 7.0.0（推荐）
 
 ### 方式一：Docker Compose 部署（推荐）
 
@@ -229,8 +254,26 @@ cd docker
 docker-compose -f docker-compose-service.yml up -d
 ```
 
-#### 5. 访问应用
+#### 5. 启动前端项目
 
+```bash
+# 进入前端目录
+cd ../web
+
+# 安装依赖（首次运行）
+npm install
+# 或使用 pnpm（推荐）
+pnpm install
+
+# 启动开发服务器
+npm run dev
+```
+
+前端服务将在 `http://localhost:5173` 启动（端口可能会有所不同）
+
+#### 6. 访问应用
+
+- **前端应用**：http://localhost:5173
 - **API 接口**：http://localhost:8090/kms
 - **健康检查**：http://localhost:8090/kms/actuator/health
 - **MinIO 控制台**：http://localhost:9001（用户名：wudao，密码：wudao@2025）
@@ -252,7 +295,7 @@ cd wudao-kms
 
 编辑 `kms-server/src/main/resources/application-dev.yml`，配置数据库、Redis、OSS 等连接信息。
 
-#### 4. 运行应用
+#### 4. 运行后端应用
 
 ```bash
 # Maven 构建
@@ -264,6 +307,23 @@ mvn spring-boot:run
 ```
 
 或使用 IDE（IntelliJ IDEA / Eclipse）直接运行 `KmsApplication.java`。
+
+#### 5. 启动前端项目
+
+```bash
+# 进入前端目录（从项目根目录）
+cd web
+
+# 安装依赖
+npm install
+# 或使用 pnpm（推荐）
+pnpm install
+
+# 启动开发服务器
+npm run dev
+```
+
+前端开发服务器启动后，访问 http://localhost:5173 即可使用系统。
 
 ---
 
@@ -337,6 +397,27 @@ wudao-kms/
 │       ├── application.yml        # 主配置文件
 │       ├── application-dev.yml    # 开发环境配置
 │       └── mapper/                # MyBatis XML
+├── web/                           # 前端项目（Vue 3）
+│   ├── src/                       # 前端源代码
+│   │   ├── api/                   # API 接口层
+│   │   │   ├── knowledge/         # 知识库接口
+│   │   │   ├── workflow/          # 工作流接口
+│   │   │   ├── specialist/        # 知识专家接口
+│   │   │   └── ...
+│   │   ├── components/            # 全局组件
+│   │   │   ├── AIDialogue/        # AI 对话组件
+│   │   │   ├── AdvancedUpload/    # 高级上传组件
+│   │   │   └── ...
+│   │   ├── views/                 # 页面视图
+│   │   ├── router/                # 路由配置
+│   │   ├── store/                 # 状态管理（Pinia）
+│   │   ├── utils/                 # 工具函数
+│   │   └── ...
+│   ├── public/                    # 静态资源
+│   ├── package.json               # 前端依赖
+│   ├── vite.config.ts             # Vite 配置
+│   ├── tsconfig.json              # TypeScript 配置
+│   └── README.md                  # 前端说明文档
 ├── docker/                        # Docker 部署文件
 │   ├── docker-compose-base.yaml   # 基础服务
 │   ├── docker-compose-service.yml # 应用服务
@@ -464,6 +545,94 @@ public class NewModelStrategy implements ChatModelStrategy {
 }
 ```
 
+### 前端开发指南
+
+#### 可用命令
+
+```bash
+# 启动开发环境
+npm run dev
+
+# 生产环境构建
+npm run build:prod
+
+# UAT 环境构建
+npm run build:uat
+
+# 开发环境构建
+npm run build:dev
+
+# 预览构建结果
+npm run preview
+
+# ESLint 代码检查与修复
+npm run lint:eslint
+
+# Prettier 代码格式化
+npm run prettier
+```
+
+#### 环境配置
+
+项目支持多环境配置，在项目根目录创建对应的 `.env` 文件：
+
+- `.env.development` - 开发环境
+- `.env.uat` - UAT 测试环境
+- `.env.production` - 生产环境
+
+示例配置：
+
+```env
+# 应用端口
+VITE_APP_PORT=5173
+
+# API 基础路径
+VITE_APP_BASE_API=/api
+
+# 应用上下文路径
+VITE_APP_CONTEXT_PATH=/
+```
+
+#### 前端构建部署
+
+```bash
+# 生产环境构建
+npm run build:prod
+```
+
+构建产物将生成在 `dist/` 目录下，可部署到 Nginx、Apache 等 Web 服务器。
+
+**Nginx 配置示例**：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        root /path/to/web/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 代理后端 API
+    location /api/ {
+        proxy_pass http://backend-server:8090/kms/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+#### 开发规范
+
+- **代码风格**：遵循 ESLint + Prettier 规范
+- **组件命名**：使用 PascalCase（大驼峰）
+- **文件命名**：组件文件使用 PascalCase，工具文件使用 camelCase
+- **提交规范**：建议使用 Conventional Commits 规范
+
+详细的前端开发文档请参考 `web/README.md`。
+
 ---
 
 ## ⚠️ 注意事项
@@ -492,6 +661,23 @@ public class NewModelStrategy implements ChatModelStrategy {
    - 生产环境务必修改默认密码
    - 配置 HTTPS 证书
    - 启用 JWT Token 认证
+
+6. **前端开发**
+   - 前端项目需要单独启动开发服务器
+   - 开发环境下前后端分离，通过 Vite 代理访问后端 API
+   - 生产环境构建后可部署到任何静态文件服务器
+
+---
+
+## 🌐 浏览器支持
+
+推荐使用现代浏览器的最新版本以获得最佳体验：
+
+| ![Chrome](https://raw.githubusercontent.com/alrra/browser-logos/master/src/chrome/chrome_48x48.png) | ![Firefox](https://raw.githubusercontent.com/alrra/browser-logos/master/src/firefox/firefox_48x48.png) | ![Safari](https://raw.githubusercontent.com/alrra/browser-logos/master/src/safari/safari_48x48.png) | ![Edge](https://raw.githubusercontent.com/alrra/browser-logos/master/src/edge/edge_48x48.png) |
+|:---:|:---:|:---:|:---:|
+| Latest ✔ | Latest ✔ | Latest ✔ | Latest ✔ |
+
+**最低版本要求**：Chrome 90+、Firefox 88+、Safari 14+、Edge 90+
 
 ---
 
@@ -531,10 +717,16 @@ public class NewModelStrategy implements ChatModelStrategy {
 
 ## 📞 联系我们
 
-- **项目地址**：[GitHub](https://github.com/your-org/wudao-kms)
+- **项目地址**：[GitHub](https://github.com/your-org/wudao-kms) | [GitEE](https://gitee.com/wudao-tech/wudao-kms.git)
 - **问题反馈**：[Issues](https://github.com/your-org/wudao-kms/issues)
-- **官方网站**：待补充
-- **技术交流群**：待补充
+- **官方网站**：[物道智云](https://wudao-tech.com)
+- **帮助文档**：[帮助文档](https://wudaotech.feishu.cn/wiki/FxliwHDiTiFcmskOHSccvlesnbI)
+
+### 技术交流群
+
+<p align="center">
+    <img src="./doc/imgs/contact.png" alt="联系方式" width="300"/>
+</p>
 
 ---
 

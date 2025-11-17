@@ -1,0 +1,235 @@
+[
+  {
+    "name": "System1",
+    "path": "/system",
+    "hidden": false,
+    "redirect": "noRedirect",
+    "component": "Layout",
+    "alwaysShow": true,
+    "meta": {
+      "title": "系统管理",
+      "icon": "system",
+      "noCache": false,
+      "link": null
+    },
+    "children": [
+      {
+        "name": "User100",
+        "path": "user",
+        "hidden": false,
+        "component": "system/user/index",
+        "meta": {
+          "title": "用户管理",
+          "icon": "user",
+          "noCache": false,
+          "link": null
+        }
+      },
+      {
+        "name": "Role101",
+        "path": "role",
+        "hidden": false,
+        "component": "system/role/index",
+        "meta": {
+          "title": "角色管理",
+          "icon": "peoples",
+          "noCache": false,
+          "link": null
+        }
+      },
+      {
+        "name": "Menu102",
+        "path": "menu",
+        "hidden": false,
+        "component": "system/menu/index",
+        "meta": {
+          "title": "菜单管理",
+          "icon": "tree-table",
+          "noCache": false,
+          "link": null
+        }
+      },
+      {
+        "name": "Dept103",
+        "path": "dept",
+        "hidden": false,
+        "component": "system/dept/index",
+        "meta": {
+          "title": "部门管理",
+          "icon": "tree",
+          "noCache": false,
+          "link": null
+        }
+      },
+      {
+        "name": "Post104",
+        "path": "post",
+        "hidden": false,
+        "component": "system/post/index",
+        "meta": {
+          "title": "岗位管理",
+          "icon": "post",
+          "noCache": false,
+          "link": null
+        }
+      },
+      {
+        "name": "Dict105",
+        "path": "dict",
+        "hidden": false,
+        "component": "system/dict/index",
+        "meta": {
+          "title": "字典管理",
+          "icon": "dict",
+          "noCache": false,
+          "link": null
+        }
+      },
+      {
+        "name": "Log108",
+        "path": "log",
+        "hidden": false,
+        "redirect": "noRedirect",
+        "component": "ParentView",
+        "alwaysShow": true,
+        "meta": {
+          "title": "日志管理",
+          "icon": "log",
+          "noCache": false,
+          "link": null
+        },
+        "children": [
+          {
+            "name": "Operlog500",
+            "path": "operlog",
+            "hidden": false,
+            "component": "monitor/operlog/index",
+            "meta": {
+              "title": "操作日志",
+              "icon": "form",
+              "noCache": false,
+              "link": null
+            }
+          },
+          {
+            "name": "Logininfor501",
+            "path": "logininfor",
+            "hidden": false,
+            "component": "monitor/logininfor/index",
+            "meta": {
+              "title": "登录日志",
+              "icon": "logininfor",
+              "noCache": false,
+              "link": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "1843499782042652674",
+    "path": "/",
+    "hidden": false,
+    "component": "Layout",
+    "meta": {
+      "title": "上级",
+      "icon": "system",
+      "noCache": false,
+      "link": null
+    },
+    "children": [
+      {
+        "name": "1123131241843499782042652674",
+        "path": "112313124",
+        "hidden": false,
+        "meta": {
+          "title": "测试",
+          "icon": "bug",
+          "noCache": false,
+          "link": null
+        }
+      }
+    ]
+  },
+  {
+    "name": "Tenant6",
+    "path": "/tenant",
+    "hidden": false,
+    "redirect": "noRedirect",
+    "component": "Layout",
+    "alwaysShow": true,
+    "meta": {
+      "title": "租户管理",
+      "icon": "chart",
+      "noCache": false,
+      "link": null
+    },
+    "children": [
+      {
+        "name": "Tenant121",
+        "path": "tenant",
+        "hidden": false,
+        "component": "system/tenant/index",
+        "meta": {
+          "title": "租户管理",
+          "icon": "list",
+          "noCache": false,
+          "link": null
+        }
+      },
+      {
+        "name": "TenantPackage122",
+        "path": "tenantPackage",
+        "hidden": false,
+        "component": "system/tenantPackage/index",
+        "meta": {
+          "title": "租户套餐管理",
+          "icon": "form",
+          "noCache": false,
+          "link": null
+        }
+      }
+    ]
+  },
+  {
+    "name": "Tool3",
+    "path": "/tool",
+    "hidden": false,
+    "redirect": "noRedirect",
+    "component": "Layout",
+    "alwaysShow": true,
+    "meta": {
+      "title": "系统工具",
+      "icon": "tool",
+      "noCache": false,
+      "link": null
+    },
+    "children": [
+      {
+        "name": "Build114",
+        "path": "build",
+        "hidden": false,
+        "component": "tool/build/index",
+        "meta": {
+          "title": "表单构建",
+          "icon": "build",
+          "noCache": false,
+          "link": null
+        }
+      },
+      {
+        "name": "Gen115",
+        "path": "gen",
+        "hidden": false,
+        "component": "tool/gen/index",
+        "meta": {
+          "title": "代码生成",
+          "icon": "code",
+          "noCache": false,
+          "link": null
+        }
+      }
+    ]
+  }
+]

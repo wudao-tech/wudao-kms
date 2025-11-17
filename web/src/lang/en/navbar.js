@@ -1,0 +1,20 @@
+export default {
+  full: 'Full Screen',
+  language: 'Language',
+  dashboard: 'Dashboard',
+  document: 'Document',
+  message: 'Message',
+  layoutSize: 'Layout Size',
+  selectTenant: 'Select Tenant',
+  layoutSetting: 'Layout Setting',
+  personalCenter: 'Personal Center',
+  logout: 'Logout',
+  id: 'id',
+  showName: '用户',
+  componentsName: '名称',
+  componentsType: '类型',
+  storehouseId: '大id',
+  encapsulationMethod: '方式',
+  labels: '显示',
+  componentsDescription: '描述'
+};

@@ -1,0 +1,20 @@
+export default {
+  full: '全屏',
+  language: '语言',
+  dashboard: '首页',
+  document: '项目文档',
+  message: '消息',
+  layoutSize: '布局大小',
+  selectTenant: '选择租户',
+  layoutSetting: '布局设置',
+  personalCenter: '个人中心',
+  logout: '退出登录',
+  id: 'id',
+  showName: '用户',
+  componentsName: '名称',
+  componentsType: '类型',
+  storehouseId: '大id',
+  encapsulationMethod: '方式',
+  labels: '显示',
+  componentsDescription: '描述'
+};
