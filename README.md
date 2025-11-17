@@ -717,8 +717,8 @@ server {
 
 ## 📞 联系我们
 
-- **项目地址**：[GitHub](https://github.com/your-org/wudao-kms) | [GitEE](https://gitee.com/wudao-tech/wudao-kms.git)
-- **问题反馈**：[Issues](https://github.com/your-org/wudao-kms/issues)
+- **项目地址**：[GitHub](https://github.com/wudao-tech/wudao-kms) | [GitEE](https://gitee.com/wudao-tech/wudao-kms.git)
+- **问题反馈**：[Issues](https://github.com/wudao-tech/wudao-kms)
 - **官方网站**：[物道智云](https://wudao-tech.com)
 - **帮助文档**：[帮助文档](https://wudaotech.feishu.cn/wiki/FxliwHDiTiFcmskOHSccvlesnbI)
 
