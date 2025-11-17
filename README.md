@@ -113,11 +113,11 @@
 
 #### 向量模型（Embedding）
 
-- text-embedding-v2/v3（阿里通义）
+- text-embedding-v4（阿里通义）
 
 #### 重排模型（Rerank）
 
-- gte-rerank（阿里通义）
+- qwen3-rerank（阿里通义）
 
 ---
 
