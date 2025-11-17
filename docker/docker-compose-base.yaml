@@ -1,0 +1,52 @@
+version: '3'
+services:
+  km-postgres:
+    network_mode: "bridge"
+    image: registry.cn-hangzhou.aliyuncs.com/wudao-tech/postgres:17
+    container_name: km-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=wudao@2025
+    ports:
+      - "5432:5432"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "5"
+    volumes:
+      - "/home/wudao/base/postgres/data:/var/lib/postgresql/data/"
+  km-minio:
+    network_mode: "bridge"
+    image: registry.cn-hangzhou.aliyuncs.com/wudao-tech/minio:latest
+    container_name: km-minio
+    restart: unless-stopped
+    environment:
+      - MINIO_ROOT_USER=wudao
+      - MINIO_ROOT_PASSWORD=wudao@2025
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "5"
+    volumes:
+      - "/home/wudao/base/minio:/data"
+  km-redis:
+    network_mode: "bridge"
+    image: registry.cn-hangzhou.aliyuncs.com/wudao-tech/redis:latest
+    container_name: km-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "5"
+    volumes:
+      - "/home/wudao/base/redis/data:/data"
+      - "/home/wudao/base/redis/conf/redis.conf:/usr/local/etc/redis/redis.conf"

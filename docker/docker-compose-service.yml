@@ -1,0 +1,37 @@
+services:
+  km-wudao-kms:
+    platform: linux/amd64
+    network_mode: "bridge"
+    image: wudao-kms:1.1
+    container_name: km-wudao-kms
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      - ENV_DOMAIN=http://宿主机ip:8090
+      - ENV_DATABASE_URL=宿主机ip
+      - ENV_DATABASE_USERNAME=postgres
+      - ENV_DATABASE_PASSWORD=wudao@2025
+      - ENV_DATABASE_NAME=postgres
+      - ENV_REDIS_HOST=宿主机ip
+      - ENV_REDIS_PORT=6379
+      - ENV_REDIS_DATABASE=0
+      - ENV_REDIS_PASSWORD=redis mima
+      - ENV_LOG_LEVEL=INFO
+      - OSS_ENDPOINT=http://宿主机ip:9000
+      - OSS_ACCESS_KEY=wudao
+      - OSS_SECRET_KEY=wudao@2025
+      - OSS_BUCKET_NAME=wudao-kms
+      - OSS_PATH_STYLE_ACCESS_ENABLED=true
+      - OSS_STATIC_BUCKET_NAME=wudao-kms-static
+      - DASHSCOPE_API= dashscope api
+      - ENV_MINERU_IMAGE=registry.cn-hangzhou.aliyuncs.com/wudao-tech/ocr-vlm:20251114
+      - ENV_DOCKER_BIND_PATH=/data/wudao-kms/uploadPath
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "5"
+    volumes:
+      - "/data/wudao-kms/logs:/logs"
+      - "/data/wudao-kms/uploadPath:/uploadPath"
