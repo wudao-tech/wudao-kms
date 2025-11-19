@@ -5,9 +5,9 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.wudao</groupId>
+        <groupId>com.wudao-tech</groupId>
         <artifactId>parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.0</version>
         <relativePath/> <!-- 或者干脆不写这一行 -->
     </parent>
 
@@ -79,20 +79,20 @@
         </dependency>
 
         <dependency>
-            <groupId>com.wudao</groupId>
+            <groupId>com.wudao-tech</groupId>
             <artifactId>wudao-web</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.wudao</groupId>
+            <groupId>com.wudao-tech</groupId>
             <artifactId>wudao-security</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.wudao</groupId>
+            <groupId>com.wudao-tech</groupId>
             <artifactId>wudao-comment</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.wudao</groupId>
+            <groupId>com.wudao-tech</groupId>
             <artifactId>wudao-oss</artifactId>
         </dependency>
 
@@ -170,7 +170,7 @@
         </dependency>
 
         <dependency>
-            <groupId>com.wudao</groupId>
+            <groupId>com.wudao-tech</groupId>
             <artifactId>wudao-common</artifactId>
         </dependency>
 
