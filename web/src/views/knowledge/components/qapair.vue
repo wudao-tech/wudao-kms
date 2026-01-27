@@ -2,14 +2,21 @@
     <div style="width: 100%; height: 100%; padding: 20px;">
         
         <div class="qa-pair-content">
-            <div style="display: flex; align-items: center; justify-content: end;margin-bottom: 10px;">
-                <el-select v-model="queryParams.reviewStatus" placeholder="请选择" style="width: 150px; margin-right: 10px;" clearable @change="getQaPairList">
-                    <el-option label="已采纳" value="pass" />
-                    <el-option label="审核中" value="reviewing" />
-                </el-select>
-                <el-button  @click="handleBatchPass" icon="CircleCheck" :disabled="selectedRows.length === 0 || permissionType === 3">采纳</el-button>
-                <el-button  @click="handleBatchDelete" icon="Delete" :disabled="selectedRows.length === 0 || permissionType === 3">删除</el-button>
-                <el-button type="primary" @click="handleAdd" icon="Plus" :disabled="permissionType === 3">录入问答</el-button>
+            <div style="display: flex; align-items: center; justify-content: space-between;margin-bottom: 10px;">
+                <div>
+                    <el-input v-model="queryParams.question" placeholder="请输入问题" prefix-icon="Search"  style=" width: 200px; margin-right: 10px;" clearable @input="getQaPairList"></el-input>
+                    <el-select v-model="queryParams.reviewStatus" placeholder="请选择状态" style="width: 150px; margin-right: 10px;" clearable @change="getQaPairList">
+                        <el-option label="已采纳" value="pass" />
+                        <el-option label="未采纳" value="reject" />
+                        <el-option label="审核中" value="reviewing" />
+                    </el-select>
+                </div>
+                <div>
+                    <el-button  @click="handleBatchPass('pass')" icon="CircleCheck" v-if="permissionType === 1" :disabled="selectedRows.length === 0 ">采纳</el-button>
+                    <el-button  @click="handleBatchPass('reject')" icon="CircleClose" v-if="permissionType === 1" :disabled="selectedRows.length === 0 ">拒绝</el-button>
+                    <el-button  @click="handleBatchDelete" icon="Delete" :disabled="selectedRows.length === 0 || permissionType === 3">删除</el-button>
+                    <el-button type="primary" @click="handleAdd" icon="Plus" :disabled="permissionType === 3">录入问答</el-button>
+                </div>
             </div>
             <el-table v-loading="loading" :data="tableData" style="width: 100%;" border :max-height="maxHeight" @selection-change="handleSelectionChange">
                 <el-table-column type="selection" width="55" />
@@ -23,6 +30,7 @@
                 <el-table-column prop="reviewStatus" label="状态" width="120" >
                     <template #default="{ row }">
                         <span v-if="row.reviewStatus === 'pass'">已采纳</span>
+                        <span v-else-if="row.reviewStatus === 'reject'">未采纳</span>
                         <span v-else>审核中</span>
                     </template>
                 </el-table-column>
@@ -37,13 +45,16 @@
                 </el-table-column>
                 <el-table-column prop="createByName" label="创建人" width="120" />
                 <el-table-column prop="createTime" label="创建日期" width="180" />
-                <el-table-column prop="" label="操作" width="120">
+                <el-table-column prop="" label="操作" width="140">
                     <template #default="{ row }">
                         <el-tooltip content="编辑" placement="top">
                             <el-button icon="EditPen" link :disabled="permissionType === 3" size="small" @click="handleEdit(row)"></el-button>
                         </el-tooltip>
                         <el-tooltip content="采纳" placement="top">
-                            <el-button icon="CircleCheck" link :disabled="permissionType === 3" size="small" @click="handleAccept(row)"></el-button>
+                            <el-button v-if="row.reviewStatus === 'reviewing' && permissionType === 1" icon="CircleCheck" link :disabled="permissionType === 3" size="small" @click="handleAccept(row, 'pass')"></el-button>
+                        </el-tooltip>
+                        <el-tooltip content="拒绝" placement="top">
+                            <el-button v-if="row.reviewStatus === 'reviewing' && permissionType === 1" icon="CircleClose" link :disabled="permissionType === 3" size="small" @click="handleAccept(row, 'reject')"></el-button>
                         </el-tooltip>
                         <el-tooltip content="删除" placement="top">
                             <el-button icon="Delete" link :disabled="permissionType === 3" size="small" @click="handleDelete(row)"></el-button>
@@ -138,7 +149,8 @@ const queryParams = ref({
     knowledgeId: Number(route.query.id),
     pageNum: 1,
     pageSize: 10,
-    reviewStatus: ''
+    reviewStatus: '',
+    question: ''
 })
 const loading = ref(false)
 const total = ref(0)
@@ -197,6 +209,11 @@ watch(() => props.spaceId, (newVal) => {
     }
 }, { immediate: true })
 
+// 判断行是否可选（只有审核状态为 reviewing 的才可选）
+const checkSelectable = (row) => {
+    return row.reviewStatus === 'reviewing'
+}
+
 const handleSelectionChange = (selection) => {
     selectedRows.value = selection
 }
@@ -206,13 +223,15 @@ const handleAdd = () => {
     activeTab.value = 'inputQuestion'
 }
 
-const handleBatchPass = () => {
+const handleBatchPass = (status) => {
     let ids = selectedRows.value.map(item => item.id)
     let params = {
-        qaIds: ids.join(',')
+        qaIds: ids.join(','),
+        status: status
     }
     acceptQaImprove(params).then(res => {
-        ElMessage.success('采纳成功')
+        ElMessage.success(status === 'pass' ? '采纳成功' : '拒绝成功')
+        selectedRows.value = []
         getQaPairList()
     })
 }
@@ -232,12 +251,13 @@ const handleBatchDelete = () => {
         })
     })
 }
-const handleAccept = (row) => {
+const handleAccept = (row, status) => {
     let params = {
-        qaIds: row.id
+        qaIds: row.id,
+        status: status
     }
     acceptQaImprove(params).then(res => {
-        ElMessage.success('采纳成功')
+        ElMessage.success(status === 'pass' ? '采纳成功' : '拒绝采纳')
         getQaPairList()
     })
 }

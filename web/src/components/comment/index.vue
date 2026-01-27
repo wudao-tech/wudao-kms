@@ -192,7 +192,7 @@
 import { ref, computed, onMounted, defineProps } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import moment from 'moment'
-import { listUser } from '@/api/system/user'
+import { listUserByDeptId } from '@/api/system/user'
 import { getCommentList, deleteComments, deleteReplys, getReplyList, addReply } from '@/api/comment'
 const target = 'knowledge'
 
@@ -602,7 +602,7 @@ onMounted(() => {
         getCommentFn()
     }
     userInfo.value = JSON.parse(localStorage.getItem('userInfo'))
-    listUser({pageNum: 1, pageSize: 1000}).then(res => {
+    listUserByDeptId().then(res => {
         userList.value = res.data
     })
 })

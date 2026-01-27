@@ -9,6 +9,7 @@ import com.wudao.kms.dto.knowledgefile.KnowledgeTempDTO;
 import com.wudao.kms.dto.knowledgefile.KnowledgeFileBatchDownloadDTO;
 import com.wudao.kms.dto.knowledgefile.KnowledgeFileOnlineCreateDTO;
 import com.wudao.kms.entity.KnowledgeFile;
+import com.wudao.kms.entity.req.KnowledgeFileApproveReq;
 import com.wudao.kms.service.FavoriteRecordService;
 import com.wudao.kms.service.KnowledgeFileService;
 import com.wudao.kms.service.VisitRecordService;
@@ -59,6 +60,13 @@ public class KnowledgeFileController {
     public R<Boolean> update(@RequestBody KnowledgeFile knowledgeFile) {
         Boolean result = knowledgeFileService.updateKnowledgeFile(knowledgeFile);
         return R.ok(result);
+    }
+
+    @Operation(summary = "批量采纳")
+    @PutMapping("/approveBatch")
+    private R<Void> approveBatch(@RequestBody KnowledgeFileApproveReq req){
+        knowledgeFileService.approveBatch(req);
+        return R.ok();
     }
 
     @Operation(summary = "删除文件")

@@ -45,7 +45,6 @@ public class SearchHistoryService extends ServiceImpl<SearchHistoryMapper, Searc
                 return;
             }
 
-
             // 创建新的搜索记录
             SearchHistory searchHistory = new SearchHistory()
                     .setContent(content.trim())

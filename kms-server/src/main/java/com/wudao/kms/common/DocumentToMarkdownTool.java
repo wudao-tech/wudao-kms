@@ -853,13 +853,7 @@ public class DocumentToMarkdownTool {
 
             for (int sheetIndex = 0; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
                 Sheet sheet = workbook.getSheetAt(sheetIndex);
-                String sheetName = sheet.getSheetName();
-
-                // 添加工作表标题
-                if (workbook.getNumberOfSheets() > 1) {
-                    markdown.append("## ").append(sheetName).append("\n\n");
-                }
-
+                
                 // 处理表格数据
                 boolean isFirstRow = true;
                 for (Row row : sheet) {
@@ -883,8 +877,7 @@ public class DocumentToMarkdownTool {
                         isFirstRow = false;
                     }
                 }
-
-                markdown.append("\n");
+                markdown.append("\n"); // sheet之间空行分隔
             }
         }
 
@@ -922,22 +915,40 @@ public class DocumentToMarkdownTool {
     private String getCellValue(Cell cell) {
         if (cell == null) return "";
 
+        String value;
         switch (cell.getCellType()) {
             case STRING:
-                return cell.getStringCellValue().replace("|", "\\|");
+                value = cell.getStringCellValue();
+                break;
             case NUMERIC:
                 if (DateUtil.isCellDateFormatted(cell)) {
-                    return cell.getDateCellValue().toString();
+                    value = cell.getDateCellValue().toString();
                 } else {
-                    return String.valueOf(cell.getNumericCellValue());
+                    // 避免 .0
+                    double val = cell.getNumericCellValue();
+                    if (val == (long) val) {
+                        value = String.format("%d", (long) val);
+                    } else {
+                        value = String.valueOf(val);
+                    }
                 }
+                break;
             case BOOLEAN:
-                return String.valueOf(cell.getBooleanCellValue());
+                value = String.valueOf(cell.getBooleanCellValue());
+                break;
             case FORMULA:
-                return cell.getCellFormula();
+                try {
+                    value = cell.getStringCellValue();
+                } catch (IllegalStateException e) {
+                    value = String.valueOf(cell.getNumericCellValue());
+                }
+                break;
             default:
-                return "";
+                value = "";
         }
+        
+        // 清理特殊字符，防止破坏 Markdown 表格结构
+        return value.replace("|", "\\|").replace("\n", "<br>").replace("\r", "");
     }
 
     // ========================= MD 处理方法 =========================

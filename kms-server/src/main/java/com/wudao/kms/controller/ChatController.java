@@ -2,6 +2,7 @@ package com.wudao.kms.controller;
 
 import com.wudao.common.model.vo.R;
 import com.wudao.kms.dto.ChatFileUploadDTO;
+import com.wudao.kms.dto.ChatRequestDTO;
 import com.wudao.kms.service.ChatService;
 import com.wudao.kms.service.ChatSessionQaService;
 import com.wudao.kms.service.ChatSessionService;
@@ -15,9 +16,11 @@ import io.swagger.v3.oas.annotations.Parameter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -100,6 +103,19 @@ public class ChatController {
         return R.ok(fileRecord);
     }
 
+    @Operation(summary = "开始聊天",description = "使用flux流式返回结果还有参数联网flag、深度思考flag、文件列表")
+    @PostMapping("/startChat")
+    public SseEmitter startChat(@RequestBody ChatRequestDTO requestDTO){
+        return chatService.startChat(requestDTO);
+    }
+
+    @Operation(summary = "推荐知识库", description = "把聊天经常返回的知识库记录下来，用于推荐")
+    @PostMapping("/recommendKnowledgeBase")
+    public R<List<String>> recommendKnowledgeBase(){
+        // TODO: 实现推荐逻辑
+        List<String> recommendations = List.of("推荐知识库1", "推荐知识库2");
+        return R.ok(recommendations);
+    }
 
     @Operation(summary = "获取会话文件列表", description = "获取指定会话的所有上传文件")
     @GetMapping("/getSessionFiles")

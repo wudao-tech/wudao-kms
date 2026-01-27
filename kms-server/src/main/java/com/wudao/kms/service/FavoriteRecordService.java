@@ -213,6 +213,9 @@ public class FavoriteRecordService extends MPJBaseServiceImpl<FavoriteRecordMapp
                 .orderByDesc(FavoriteRecord::getFavoriteTime);
 
         Page<FavoriteRecordVO> resultPage = this.baseMapper.selectJoinPage(page1, FavoriteRecordVO.class, wrapper);
+        if (resultPage.getRecords() == null || resultPage.getRecords().isEmpty()) {
+            return List.of();
+        }
 
         List<Long> userIds = resultPage.getRecords().stream().map(item -> Long.parseLong(item.getCreatedBy())).toList();
         List<SysUser> sysUsers = sysUserMapper.selectByIds(userIds);

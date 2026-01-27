@@ -103,6 +103,15 @@ export const deleteFile = (id) => {
   })
 }
 
+// 批量采纳拒绝
+export const batchAcceptReject = (data) => {
+  return request({
+    method: 'put',
+    url: '/api/knowledge-file/approveBatch',
+    data
+  })
+}
+
 // 文件详情
 export const fileDetail = (id) => {
   return request({

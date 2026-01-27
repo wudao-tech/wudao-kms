@@ -4,15 +4,19 @@
       <div class="left-content"  :class="{ 'expanded': !assistantVisible }">
         <!-- 欢迎区域 -->
         <div class="welcome-section">
-          <div>
-            <div class="date-info">
-            <span class="date">{{ d }}</span>
-            <span class="day">{{ w }}</span>
-            <span class="time">{{ h }}</span>
+          <div class="welcome-left">
+            <div class="welcome-top-row">
+              <div class="date-info">
+                <span class="date">{{ d }}</span>
+                <span class="day">{{ w }}</span>
+                <span class="time">{{ h }}</span>
+              </div>
+              <div class="divider"></div>
+              <div class="token-quota">每天免费Token额度：{{ formatTokenNumber(tokenQuota.todayUsedToken) }}/{{ formatTokenNumber(tokenQuota.dailyMaxToken) }}</div>
+            </div>
+            <div class="greeting"><span class="username">{{ user.username || '用户' }}，</span><span class="welcome-text">欢迎回来</span></div>
           </div>
-          <div class="greeting">{{ user.username || '用户' }}，<span style="font-size: 14px;">欢迎回来</span></div>
-          </div>
-          <div style="font-size: 18px;color: #6C308F; font-weight: 600; font-style: italic;">物道AI知识库让工业会思考，会协作，会进化</div>
+          <div class="slogan">物道AI知识库让工业会思考，会协作，会进化</div>
         </div>
 
         <!-- 快速开始 -->
@@ -48,7 +52,7 @@
             <div class="stats-section"> 
               <div class="stats-tabs">
                 <div :class="{ 'tab-item': true, active: activeTab1 === 'visit' }"  @click="handleTab1('visit')">最近访问</div>
-                <div  :class="{ 'tab-item': true, active: activeTab1 === 'collect' }" @click="handleTab1('collect')">收藏</div>
+                <div  :class="{ 'tab-item': true, active: activeTab1 === 'collect' }" @click="handleTab1('collect')">我收藏的</div>
                 <!-- <div  :class="{ 'tab-item': true, active: activeTab1 === 'notice' }" @click="handleTab1('notice')">待办({{ todoList.length }})</div> -->
               </div>
             </div>
@@ -160,6 +164,7 @@ import { getInfo } from '@/api/login'
 import { addConfigEl } from '@/api/system/config'
 
 import { getAssistantDetail } from '@/api/knowledgeExpert'
+import { getTokenQuota } from '@/api/model'
 import WdAgent from '@/components/WdAgent.vue'
 import { 
    getWorkspaceVisitRecord,
@@ -214,6 +219,13 @@ const myList = ref([])
 const suggestions = ref([])
 
 const loading = ref(false)
+
+// Token 额度数据
+const tokenQuota = ref({
+  dailyMaxToken: 0,
+  todayUsedToken: 0,
+  remainingToken: 0
+})
 
 const handleTab1 = async (tab) => {
   activeTab1.value = tab
@@ -312,6 +324,26 @@ const getMyVisit = async () => {
   countAll.value = res.data
 }
 
+// 获取 Token 额度
+const getTokenQuotaFn = async () => {
+  const res = await getTokenQuota()
+  if (res.data) {
+    tokenQuota.value = res.data
+  }
+}
+
+// 格式化 Token 数量显示
+const formatTokenNumber = (num) => {
+  if (num >= 10000000) {
+    return (num / 10000000).toFixed(1) + '千万'
+  } else if (num >= 10000) {
+    return (num / 10000).toFixed(1) + '万'
+  } else if (num >= 1000) {
+    return (num / 1000).toFixed(1) + 'k'
+  }
+  return num.toString()
+}
+
 
 
 const formData = ref({})
@@ -337,6 +369,7 @@ onMounted(() => {
   list1()
   getConfigfn()
   getMyVisit()
+  getTokenQuotaFn()
 })
 onUnmounted(() => {
   clearInterval(intervalId);
@@ -392,13 +425,49 @@ onUnmounted(() => {
         display: flex;
         gap: 8px;
         align-items: center;
-        margin-bottom: 12px;
         font-size: 14px;
       }
       
       .greeting {
         font-size: 18px;
+
+        .username {
+          color: #333333;
+          font-weight: 600;
+        }
+
+        .welcome-text {
+          font-size: 14px;
+          color: #555555;
+          font-weight: 400;
+        }
+      }
+
+      .welcome-left {
+        .welcome-top-row {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          margin-bottom: 12px;
+        }
+
+        .divider {
+          width: 1px;
+          height: 16px;
+          background-color: #999;
+        }
+
+        .token-quota {
+          font-size: 14px;
+          color: #333333;
+        }
+      }
+
+      .slogan {
+        font-size: 18px;
+        color: #6C308F;
         font-weight: 600;
+        font-style: italic;
       }
     }
     

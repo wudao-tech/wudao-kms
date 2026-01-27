@@ -34,7 +34,6 @@ public enum ModelTypeEnum {
     embedding_model("embedding_model", "向量模型"),
     @Schema(description = "检索重排")
     text_rerank("text_rerank", "检索重排");
-
     @EnumValue
     private final String code;
     private final String desc;

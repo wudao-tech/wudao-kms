@@ -13,26 +13,37 @@
         <result property="s3Url" column="s3Url"/>
         <result property="createBy" column="createBy"/>
         <result property="vlContent" column="vlContent"/>
+        <result property="knowledgeBaseId" column="knowledgeBaseId"/>
+        <result property="knowledgeSpaceId" column="knowledgeSpaceId" />
+        <result property="knowledgeBaseName" column="knowledgeBaseName"/>
+        <result property="knowledgeSpaceName" column="knowledgeSpaceName"/>
     </resultMap>
 
     <!-- 使用PostgreSQL全文搜索进行分词检索（使用预分词字段segment_content_tsv） -->
     <select id="fulltextSearch" resultMap="KnowledgeSearchResultMap">
         SELECT
-            t.file_id AS documentId,
-            t.id,
-            t.segment_content AS content,
-            f.created_at as createTime,
-            ts_rank(t.segment_content_tsv, to_tsquery('chinese_zh', #{tokenizedQuery})) AS score,
-            f.file_name AS filename,
-            f.file_path AS s3Url,
-            u.nickname AS createBy,
-            t.vl_content as vlContent
+        t.file_id AS documentId,
+        t.id,
+        t.segment_content AS content,
+        f.created_at as createTime,
+        ts_rank_cd(t.segment_content_tsv, to_tsquery('chinese_zh', #{tokenizedQuery}),32) AS score,
+        f.file_name AS filename,
+        f.file_path AS s3Url,
+        u.nickname AS createBy,
+        t.vl_content as vlContent,
+        f.knowledge_base_id as knowledgeBaseId,
+        f.space_id as knowledgeSpaceId,
+        kb.name as knowledgeBaseName,
+        sp.name as knowledgeSpaceName
         FROM knowledge_file_segment t
         LEFT JOIN knowledge_file f ON t.file_id = f.id
         LEFT JOIN sys_user u ON f.created_by = u.id
+        left join knowledge_base kb on kb.id = f.knowledge_base_id
+        left join knowledge_space sp on sp.id = f.space_id
         WHERE t.delete_flag = false
-          AND t.vector_flag = true
-          AND t.segment_content_tsv @@ to_tsquery('chinese_zh', #{tokenizedQuery})
+        AND t.vector_flag = true
+        AND t.segment_content_tsv @@ to_tsquery('chinese_zh', #{tokenizedQuery})
+        and f.approve_status = 'agree'
         <if test="knowledgeBaseIds != null and knowledgeBaseIds.size() > 0">
             AND t.knowledge_base_id IN
             <foreach collection="knowledgeBaseIds" item="id" open="(" separator="," close=")">
@@ -66,11 +77,18 @@
             f.file_name AS filename,
             f.file_path AS s3Url,
             u.nickname AS createBy,
-            t.vl_content as vlContent
+            t.vl_content as vlContent,
+            f.knowledge_base_id as knowledgeBaseId,
+            f.space_id as knowledgeSpaceId,
+            kb.name as knowledgeBaseName,
+            sp.name as knowledgeSpaceName
             FROM knowledge_file_segment t
             LEFT JOIN knowledge_file f ON t.file_id = f.id
+            left join knowledge_base kb on kb.id = f.knowledge_base_id
+            left join knowledge_space sp on sp.id = f.space_id
             LEFT JOIN sys_user u ON f.created_by = u.id
             WHERE t.vector_flag = true
+            and f.approve_status = 'agree'
             AND t.vector IS NOT NULL
             <if test="knowledgeBaseIds != null and knowledgeBaseIds.size() > 0">
                 AND t.knowledge_base_id IN

@@ -17,6 +17,7 @@ import com.wudao.kms.llm.chat.ChatModelStrategy;
 import com.wudao.kms.llm.llmmode.domain.LLMModel;
 import com.wudao.kms.llm.message.domain.AgentMessage;
 import com.wudao.kms.llm.message.mapper.AgentMessageMapper;
+import com.wudao.kms.llm.provider.mapper.ModelProviderMapper;
 import com.wudao.kms.mapper.KnowledgeFileSegmentMapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -27,13 +28,13 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
 import org.springframework.ai.embedding.Embedding;
+import org.springframework.ai.embedding.EmbeddingOptions;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.ollama.OllamaEmbeddingModel;
-import org.springframework.ai.ollama.api.OllamaOptions;
+import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -54,16 +55,19 @@ public class OllamaStrategy implements ChatModelStrategy {
     @Resource
     private KnowledgeFileSegmentMapper knowledgeFileSegmentMapper;
 
-    @Value("${env.api-key.ollama.base-url:#{null}}")
-    private String ollamaBaseUrl;
+    @Resource
+    private ModelProviderMapper modelProviderMapper;
+
+    private static final String PROVIDER_CODE = "ollama";
 
     /**
      * 在使用时直接创建ChatClient
      */
     private ChatClient createChatClient() {
+        String baseUrl = modelProviderMapper.getByProviderCode(PROVIDER_CODE).getEndpoint();
         org.springframework.ai.ollama.api.OllamaApi ollamaApi =
                 org.springframework.ai.ollama.api.OllamaApi.builder()
-                        .baseUrl(ollamaBaseUrl)
+                        .baseUrl(baseUrl)
                         .build();
         OllamaChatModel customChatModel = OllamaChatModel.builder()
                 .ollamaApi(ollamaApi)
@@ -75,9 +79,10 @@ public class OllamaStrategy implements ChatModelStrategy {
      * 在使用时直接创建EmbeddingModel
      */
     private OllamaEmbeddingModel createEmbeddingModel() {
+        String baseUrl = modelProviderMapper.getByProviderCode(PROVIDER_CODE).getEndpoint();
         org.springframework.ai.ollama.api.OllamaApi ollamaApi =
                 org.springframework.ai.ollama.api.OllamaApi.builder()
-                        .baseUrl(ollamaBaseUrl)
+                        .baseUrl(baseUrl)
                         .build();
         return OllamaEmbeddingModel.builder()
                 .ollamaApi(ollamaApi)
@@ -88,7 +93,7 @@ public class OllamaStrategy implements ChatModelStrategy {
     public Flux<ServerSentEvent<String>> chat(LLMModel llmModel, String userPrompt, Map<String, Object> toolParam, String sessionUuid, AgentChatReq chatReq, List<ToolCallback> toolCallbacks) {
         Assistant assistant = chatReq.getAssistant();
 
-        OllamaOptions ollamaOptions = OllamaOptions.builder()
+        OllamaChatOptions ollamaOptions = OllamaChatOptions.builder()
                 .model(llmModel.getModel())
                 .temperature(assistant.getTemperature())
                 .topP(assistant.getTopP())
@@ -206,7 +211,7 @@ public class OllamaStrategy implements ChatModelStrategy {
     }
 
     @Override
-    public String vl(String model, String prompt, List<Media> mediaList) {
+    public String vl(String model, String prompt, List<Media> mediaList, Long userId) {
         // 使用Ollama的多模态模型（如llava）
         try {
             UserMessage message = UserMessage.builder()
@@ -215,7 +220,7 @@ public class OllamaStrategy implements ChatModelStrategy {
                     .build();
 
             Prompt chatPrompt = new Prompt(message,
-                    OllamaOptions.builder()
+                    OllamaChatOptions.builder()
                             .model(model)  // 使用支持视觉的模型，如 llava
                             .build());
 
@@ -232,7 +237,7 @@ public class OllamaStrategy implements ChatModelStrategy {
     }
 
     @Override
-    public List<float[]> embedding(String model, List<String> contents) {
+    public List<float[]> embedding(String model, List<String> contents, Long userId) {
         if (CollUtil.isEmpty(contents)) {
             return new ArrayList<>();
         }
@@ -240,7 +245,7 @@ public class OllamaStrategy implements ChatModelStrategy {
         try {
             // Ollama embedding支持批量处理
             EmbeddingRequest request = new EmbeddingRequest(contents,
-                    org.springframework.ai.ollama.api.OllamaOptions.builder()
+                    EmbeddingOptions.builder()
                             .model(model)
                             .build());
 
@@ -258,7 +263,7 @@ public class OllamaStrategy implements ChatModelStrategy {
     @Override
     public String simpleChat(String model, String systemPrompt, String userPrompt, Boolean formatRespFlag) {
         try {
-            OllamaOptions options = OllamaOptions.builder()
+            OllamaChatOptions options = OllamaChatOptions.builder()
                     .model(model)
                     .build();
 
@@ -283,7 +288,7 @@ public class OllamaStrategy implements ChatModelStrategy {
     @Override
     public String simpleChat(String model, String systemPrompt, String userPrompt, List<Media> mediaList) {
         try {
-            OllamaOptions options = OllamaOptions.builder()
+            OllamaChatOptions options = OllamaChatOptions.builder()
                     .model(model)
                     .build();
 
@@ -303,7 +308,7 @@ public class OllamaStrategy implements ChatModelStrategy {
     public Flux<ServerSentEvent<String>> optimizePrompt(LLMModelTestReq req) {
         return createChatClient()
                 .prompt()
-                .options(OllamaOptions.builder()
+                .options(OllamaChatOptions.builder()
                         .model(req.getLlmModel().getModel())
                         .build())
                 .user(req.getPrompt())
@@ -328,7 +333,7 @@ public class OllamaStrategy implements ChatModelStrategy {
     }
 
     @Override
-    public List<RerankResp> rerank(String model, String question, List<String> answer) {
+    public List<RerankResp> rerank(String model, String question, List<String> answer, Long userId) {
         // Ollama 不支持 rerank 功能
         log.warn("Ollama 不支持 rerank 功能，返回空列表");
         return List.of();

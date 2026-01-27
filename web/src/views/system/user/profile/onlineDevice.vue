@@ -27,7 +27,6 @@
 </template>
 
 <script name="Online" lang="ts" setup>
-import { delOnline } from '@/api/monitor/online';
 import { propTypes } from '@/utils/propTypes';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
@@ -40,18 +39,6 @@ const devices = computed(() => props.devices);
 
 /** 删除按钮操作 */
 const handldDelOnline = (row: any) => {
-  ElMessageBox.confirm('删除设备后，在该设备登录需要重新进行验证')
-    .then(() => {
-      return delOnline(row.tokenId);
-    })
-    .then((res: any) => {
-      if (res.code === 'ok') {
-        proxy?.$modal.msgSuccess('删除成功');
-        proxy?.$tab.refreshPage();
-      } else {
-        proxy?.$modal.msgError(res.msg);
-      }
-    })
-    .catch(() => {});
+ 
 };
 </script>

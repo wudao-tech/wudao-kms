@@ -14,6 +14,7 @@ import com.wudao.kms.llm.chat.ChatModelStrategy;
 import com.wudao.kms.llm.llmmode.domain.LLMModel;
 import com.wudao.kms.llm.message.domain.AgentMessage;
 import com.wudao.kms.llm.message.mapper.AgentMessageMapper;
+import com.wudao.kms.llm.provider.mapper.ModelProviderMapper;
 import com.wudao.kms.service.VectorizationService;
 import com.wudao.kms.mapper.KnowledgeFileSegmentMapper;
 import com.wudao.kms.entity.KnowledgeFileSegment;
@@ -35,7 +36,6 @@ import org.springframework.ai.zhipuai.ZhiPuAiChatOptions;
 import org.springframework.ai.zhipuai.ZhiPuAiEmbeddingModel;
 import org.springframework.ai.zhipuai.ZhiPuAiEmbeddingOptions;
 import org.springframework.ai.zhipuai.api.ZhiPuAiApi;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Component;
@@ -61,14 +61,17 @@ public class ZhipuAiChatModelStrategy implements ChatModelStrategy {
     @Resource
     private KnowledgeFileSegmentMapper knowledgeFileSegmentMapper;
 
-    @Value("${env.api-key.zhipuai:#{null}}")
-    private String zhipuaiApiKey;
+    @Resource
+    private ModelProviderMapper modelProviderMapper;
+
+    private static final String PROVIDER_CODE = "zhipu";
 
     /**
      * 在使用时直接创建ChatClient
      */
     private ChatClient createChatClient() {
-        ZhiPuAiApi zhiPuAiApi = new ZhiPuAiApi(zhipuaiApiKey);
+        String apiKey = modelProviderMapper.getByProviderCode(PROVIDER_CODE).getApiKey();
+        ZhiPuAiApi zhiPuAiApi = ZhiPuAiApi.builder().apiKey(apiKey).build();
         ZhiPuAiChatModel customChatModel = new ZhiPuAiChatModel(zhiPuAiApi);
         return ChatClient.builder(customChatModel).build();
     }
@@ -77,7 +80,8 @@ public class ZhipuAiChatModelStrategy implements ChatModelStrategy {
      * 在使用时直接创建EmbeddingModel
      */
     private ZhiPuAiEmbeddingModel createEmbeddingModel() {
-        ZhiPuAiApi zhiPuAiApi = new ZhiPuAiApi(zhipuaiApiKey);
+        String apiKey = modelProviderMapper.getByProviderCode(PROVIDER_CODE).getApiKey();
+        ZhiPuAiApi zhiPuAiApi = ZhiPuAiApi.builder().apiKey(apiKey).build();
         return new ZhiPuAiEmbeddingModel(zhiPuAiApi);
     }
 
@@ -220,7 +224,7 @@ public class ZhipuAiChatModelStrategy implements ChatModelStrategy {
     }
 
     @Override
-    public String vl(String model, String prompt, List<Media> mediaList) {
+    public String vl(String model, String prompt, List<Media> mediaList, Long userId) {
         return "";
     }
 
@@ -230,7 +234,7 @@ public class ZhipuAiChatModelStrategy implements ChatModelStrategy {
     }
 
     @Override
-    public List<float[]> embedding(String model, List<String> contents) {
+    public List<float[]> embedding(String model, List<String> contents, Long userId) {
         if (CollUtil.isEmpty(contents)) {
             return new ArrayList<>();
         }
@@ -287,7 +291,7 @@ public class ZhipuAiChatModelStrategy implements ChatModelStrategy {
     }
 
     @Override
-    public List<RerankResp> rerank(String model, String question, List<String> answer) {
+    public List<RerankResp> rerank(String model, String question, List<String> answer, Long userId) {
         return List.of();
     }
 

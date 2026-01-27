@@ -37,4 +37,4 @@ public class WebClientConfig {
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
     }
-}
+} 

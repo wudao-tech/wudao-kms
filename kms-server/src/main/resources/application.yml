@@ -1,14 +1,7 @@
 env:
-  api-key:
-    dashscope: ${DASHSCOPE_API:}
-    deepseek: ${DEEPSEEK_API:}
-    moonshot: ${MOONSHOT_API:}
-    zhipuai: ${ZHIPUAI_API:}
-    ollama: ${OLLAMA_BASE_URL:}
-    openai:
-      base-url: ${OPENAI_BASE_URL:}
-      completions-path: ${OPENAI_COMPLETIONS_PATH:}
-      api-key: ${OPENAI_API_KEY:}
+  domain: http://127.0.0.1
+  external-ip: 192.168.1.100
+  internal-ip: 127.0.0.1
 basic:
   name: kms-server
   version: 3.0.0
@@ -18,14 +11,6 @@ basic:
   internal-ip: ${env.internal-ip}
   domain: ${env.domain}
   port: ${server.port}
-
-docker:
-  docker-host: unix:///var/run/docker.sock
-  api-version: 1.43
-  registry-url: ${env.registry-url}
-  registry-username: ${env.registry-username}
-  registry-password: ${env.registry-password}
-  readTimeout: 1800000
 
 server:
   port: 8090
@@ -76,8 +61,8 @@ spring:
   data:
     redis:
       host: ${env.redis-host}
-      port: ${env.redis-port}
-      database: ${env.redis-database}
+      port: 6379
+      database: 15
       password: ${env.redis-password}
       ssl.enabled: false
       timeout: 10s
@@ -117,6 +102,7 @@ logging:
     com.baomidou.mybatisplus.core.metadata.TableInfoHelper: ${env.log-level}
     com.github.yulichang.injector.MPJSqlInjector: ${env.log-level}
     org.springaicommunity: ${env.log-level}
+    org.springframework.ai.chat.model.MessageAggregator: WARN
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
@@ -136,7 +122,45 @@ comment:
 token:
   expireTime: 720 #分钟
   header: Authorization
-  secret: HfkjksFKLJISJFKLFKWJFQFIQWIOFJQOFFQGGSDGFFJIQOEUFIEJFIOQWEFHFQOK5FKOIQWUFFEFE423FIQEOFJHUEWHFKASKDLQWJIFSJDJKFHJIJWO
+  secret: ${JWT_SECRET:your-jwt-secret-key-at-least-64-characters-long-for-security}
+
+
+# AI配置
+ai:
+  qwen:
+    api-key: ${QWEN_API_KEY:your-qwen-api-key}
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    model: qwen-turbo
+
+springdoc:
+  group-configs:
+    - group: 业务模块
+      packages-to-scan:
+        - com.wudao.security.controller
+        - com.wudao.kms
+    - group: 基础模块
+      packages-to-scan:
+        - com.wudao.framework.controller
+        - com.wudao.scheduler.controller
+    - group: 系统模块
+      packages-to-scan: com.wudao.system.controller
+
+
+
+# 向量化处理配置
+vectorization:
+  api:
+    url: http://${env.vectorization-ip}:8080
+miner-u-api: eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiI3ODkwMDE5MiIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc2MTY5ODM1NiwiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiMTMzOTEyNDg2MDUiLCJvcGVuSWQiOm51bGwsInV1aWQiOiI4NjA1MGFhMS0zZWZhLTRjZjEtYmVjMy01ZTk0OTIxNDJmNmUiLCJlbWFpbCI6IiIsImV4cCI6MTc2MjkwNzk1Nn0.pu5zaeElAW5qShN4RS3JybHT91DYQ1J-mjiVL4uphX5wYkeICM4LDWXvX3dQK1UrXPmykmqz8Ouce__aT-eT0Q
+# ocr 配置 mineru paddle
+ocr: mineru
+pai:
+  dlc:
+    access-key: ${PAI_ACCESS_KEY:your-access-key}
+    secret-key: ${PAI_SECRET_KEY:your-secret-key}
+    region: cn-hangzhou
+    endpoint: pai-dlc.cn-hangzhou.aliyuncs.com
+    oss-prefix: oss://your-bucket.oss-cn-hangzhou-internal.aliyuncs.com/
 # oauth
 justauth:
   enabled: true
@@ -149,6 +173,6 @@ justauth:
     config:
       WUDAO:
         request-class: com.wudao.security.model.AuthWudaoRequest
-        client-id: kms
-        client-secret: 9126fc68991e4d36a03bc2e9db71a53d
+        client-id: ${OAUTH_CLIENT_ID:kms}
+        client-secret: ${OAUTH_CLIENT_SECRET:your-client-secret}
         redirect-uri: ${env.domain}/kms/callback?source=wudao

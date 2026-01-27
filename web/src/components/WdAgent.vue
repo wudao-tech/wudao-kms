@@ -57,6 +57,18 @@
                             </span>
                             {{ item.quoteList.length }} 篇文章
                         </div>
+                        <!-- 安防特有功能 -->
+                        <div v-if="app === 'security' && item.showAndonButton > 0 && !item.showAndonComponent && !item.andonCreated && !item.showPdfComponent">
+                           <el-button v-if="item.showAndonButton === 1" type="primary" size="small" @click="handleShowAndonComponent(item)">Andon事件</el-button>
+                           <el-button v-if="item.showAndonButton === 2" type="primary" size="small" @click="handleVideoMonitor(item)">视频监控</el-button>
+                           <el-button v-if="item.showAndonButton === 3" type="primary" size="small" @click="handlePdfReport(item)">pdf报告</el-button>
+                        </div>
+                        <!-- 显示图片记录（使用 recordObj） -->
+                        <div v-if="app === 'security' && item.role === 'system' && item.recordObj">
+                            <slot name="image-list" :recordObj="item.recordObj">
+                                <component v-if="imageListComponent" :is="imageListComponent" :recordObj="item.recordObj" />
+                            </slot>
+                        </div>
                     </div>
                     <!-- <Typewriter v-if="item.content && item.role === 'system'" is-fog typing :content="item.content" :is-markdown="true" /> -->
                     <!-- user 图片消息 -->
@@ -92,7 +104,7 @@
                 <template #footer="{ item }">
                     <div class="footer-wrapper">
                         <!-- AIDialogue模式的操作按钮 -->
-                        <div v-if="mode === 'aidialogue' && chatUrl" class="footer-container">
+                        <div v-if="mode === 'aidialogue' && chatUrl && app !== 'security'" class="footer-container">
                             <el-tooltip content="点赞" placement="top" v-if="item.role === 'system'">
                                 <el-button link @click="handleLike(item, 'agree')">
                                     <!-- 已点赞 -->
@@ -119,6 +131,32 @@
                                     <img :src="copy" alt="copy" style="width: 17px; height: 17px;">
                                 </el-button>
                             </el-tooltip>
+                        </div>
+                        <!-- 安防功能 -->
+                        <div v-if="mode === 'aidialogue' && chatUrl && app === 'security' && item.role === 'system'">
+                            <!-- Andon 组件 -->
+                            <div v-if="item.showAndonComponent && !item.andonCreated" class="andon-component-wrapper" style="margin-top: 10px;">
+                                <slot name="andon-component" :onSuccess="() => handleAndonSuccess(item)">
+                                    <component v-if="andonComponent" :is="andonComponent" :onSuccess="() => handleAndonSuccess(item)" />
+                                </slot>
+                            </div>
+                            <!-- 创建成功提示 -->
+                            <div v-if="item.andonCreated" class="andon-success-wrapper" style="margin-top: 10px; padding: 10px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; color: #333; display: flex; align-items: center;">
+                                <el-icon style="margin-right: 5px; color: #10b981;"><CircleCheck /></el-icon>
+                                <span>Andon事件创建成功</span>
+                            </div>
+                            <!-- 视频组件 -->
+                            <div v-if="item.showMonitorComponent && item.monitorDeviceIds && item.monitorDeviceIds.length > 0" class="monitor-component-wrapper" style="margin-top: 10px;">
+                                <slot name="monitor-component" :list="item.monitorDeviceIds">
+                                    <component v-if="monitorComponent" :is="monitorComponent" :list="item.monitorDeviceIds" />
+                                </slot>
+                            </div>
+                            <!-- pdf报告 -->
+                            <div v-if="item.showPdfComponent" class="pdf-component-wrapper" style="margin-top: 10px;">
+                                <slot name="pdf-preview" :content="item.content">
+                                    <component v-if="pdfPreviewComponent" :is="pdfPreviewComponent" :content="item.content" />
+                                </slot>
+                            </div>
                         </div>
                         <!-- 追问功能 -->
                         <div v-if="item.role === 'system' && item.followUpQuestions && item.followUpQuestions.length > 0" :class="{ 'follow-up-questions': mode === 'aidialogue' }">
@@ -302,6 +340,15 @@
                 </div>
             </div>
         </div>
+    <!-- 图片预览 -->
+    <el-image-viewer
+        v-if="showImageViewer"
+        :url-list="[currentImageUrl]"
+        :initial-index="0"
+        @close="closeImageViewer"
+        :teleported="true"
+        :z-index="3000"
+    />
     </div>
 </template>
 
@@ -313,7 +360,7 @@ import '@kangc/v-md-editor/lib/style/preview.css'
 import vuepressTheme from '@kangc/v-md-editor/lib/theme/vuepress.js'
 import '@kangc/v-md-editor/lib/theme/style/vuepress.css'
 import Prism from 'prismjs'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElImageViewer } from 'element-plus'
 import robotAvatar from '@/assets/images/robot.png'
 import { getToken } from '@/utils/auth'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
@@ -322,8 +369,8 @@ import { recordQa } from '@/api/qa'
 import { useRouter, useRoute } from 'vue-router'
 import { nanoid } from '@/utils'
 // AIDialogue模式需要的图片资源
-import copy from '@/components/AIDialogue/img/copy.svg'
-import redo from '@/components/AIDialogue/img/redo.svg'
+import copy from '@/assets/images/copy.svg'
+import redo from '@/assets/images/redo.svg'
 
 // 配置markdown预览器
 VMdPreview.use(vuepressTheme, {
@@ -358,6 +405,29 @@ const props = defineProps({
     mode: {
         type: String,
         default: 'assistantchat'
+    },
+    app: {
+        type: String,
+        default: ''
+    },
+    // 安防功能组件，可以通过 props 传入
+    andonComponent: {
+        type: [Object, Function],
+        default: null
+    },
+    monitorComponent: {
+        type: [Object, Function],
+        default: null
+    },
+    // 图片列表组件
+    imageListComponent: {
+        type: [Object, Function],
+        default: null
+    },
+    // PDF预览组件
+    pdfPreviewComponent: {
+        type: [Object, Function],
+        default: null
     }
    
 })
@@ -413,6 +483,10 @@ const messageUuid = ref('') // 当前消息的uuid用来记录点赞点踩
 // 引用资料相关变量
 const searchResults = ref([])
 const showQuoteResults = ref(false)
+
+// 图片预览相关
+const showImageViewer = ref(false)
+const currentImageUrl = ref('')
 
 const questList = ref([])
 
@@ -593,15 +667,120 @@ const getFilePath = (fileName) => {
     return new URL('/src/assets/fileIcon/othe.svg', import.meta.url).href;
   }
 }
+// 解析 [type:Play:[id1,id2,id3]] 格式，提取设备ID数组
+const parsePlayDeviceIds = (text) => {
+    if (!text) return []
+    // 匹配 [type:Play:[id1,id2,id3]] 格式
+    const match = text.match(/\[\s*type\s*:\s*Play\s*:\s*\[([^\]]+)\]\s*\]/i)
+    if (match && match[1]) {
+        // 分割逗号，去除空格，过滤空值
+        return match[1].split(',').map(id => id.trim()).filter(id => id)
+    }
+    return []
+}
+
 // 将源标记转换为小图标
 const transformSourceMarkers = (text) => {
     if (!text) return text
-    // 暂时直接移除包含 doc 和 qa 的标记，置空
+    // 针对安防模式，移除所有特殊标记，但在 SSE 处理中会解析它们
     return text
-        .replace(/\[\s*type\s*:\s*doc[^\]]*\]/gi, '')
-        .replace(/\[\s*type\s*:\s*qa[^\]]*\]/gi, '')
-        // .replace(/\[\s*type\s*:\s*doc[^\]]*\]/gi, '<span class="source-badge source-doc" title="来自文件"></span>')
-        // .replace(/\[\s*type\s*:\s*qa[^\]]*\]/gi, '<span class="source-badge source-qa" title="来自QA"></span>')
+        .replace(/\[\s*type\s*:\s*doc[^\]]*\]/gi, props.app === 'security' ? '' : `![source-marker-doc](${getFilePath('doc.svg')})`)
+        .replace(/\[\s*type\s*:\s*qa[^\]]*\]/gi, props.app === 'security' ? '' : `![source-marker-qa](${getFilePath('qa.svg')})`)
+        .replace(/\[\s*type\s*:\s*Andon_Create\s*\]/gi, '') // 移除 Andon_Create 标记
+        .replace(/\[\s*type\s*:\s*Play\s*:[^\]]*\]/gi, '') // 移除 Play 标记
+        .replace(/\[\s*type\s*:\s*pdf\s*\]/gi, '') // 移除 PDF 标记
+}
+
+// 从 content 中提取 type: record 的 JSON 对象
+const extractRecordJson = (content) => {
+    if (!content) return { recordObj: null, cleanedContent: content }
+    
+    let recordObj = null
+    let cleanedContent = content
+    
+    try {
+        let searchContent = content
+        try {
+            if ((content.startsWith('"') && content.endsWith('"')) || content.startsWith('{')) {
+                const parsed = JSON.parse(content)
+                if (typeof parsed === 'string') {
+                    searchContent = parsed
+                }
+            }
+        } catch (e) {}
+        
+        let recordIndex = searchContent.indexOf('"type":"record"')
+        if (recordIndex === -1) {
+            recordIndex = searchContent.indexOf('\\"type\\":\\"record\\"')
+        }
+        if (recordIndex !== -1) {
+            let jsonStartIndex = searchContent.lastIndexOf('{', recordIndex)
+            if (jsonStartIndex === -1) {
+                const escapedBraceIndex = searchContent.lastIndexOf('\\{', recordIndex)
+                if (escapedBraceIndex !== -1) {
+                    jsonStartIndex = escapedBraceIndex + 1
+                }
+            }
+            
+            if (jsonStartIndex === -1) {
+                jsonStartIndex = Math.max(0, recordIndex - 10)
+            }
+            
+            let braceCount = 0
+            let jsonEndIndex = -1
+            
+            for (let i = jsonStartIndex; i < searchContent.length; i++) {
+                const char = searchContent[i]
+                const prevChar = i > 0 ? searchContent[i - 1] : ''
+                
+                if (char === '\\' && prevChar !== '\\') continue
+                
+                if (char === '{' && prevChar !== '\\') {
+                    braceCount++
+                } else if (char === '}' && prevChar !== '\\') {
+                    braceCount--
+                    if (braceCount === 0) {
+                        jsonEndIndex = i + 1
+                        break
+                    }
+                }
+            }
+            
+            if (jsonEndIndex !== -1) {
+                let jsonStr = searchContent.substring(jsonStartIndex, jsonEndIndex)
+                if (jsonStr.includes('\\"')) {
+                    jsonStr = jsonStr.replace(/\\(.)/g, '$1')
+                }
+                
+                try {
+                    const recordData = JSON.parse(jsonStr)
+                    if (recordData.type === 'record') {
+                        recordObj = {
+                            startTime: recordData.startTime || '',
+                            endTime: recordData.endTime || '',
+                            imgDescr: recordData.imgDescr || ''
+                        }                     
+                        let originalStartIndex = -1
+                        const escapedJsonStart = content.indexOf('{\\"type\\":\\"record\\"')
+                        if (escapedJsonStart !== -1) {
+                            originalStartIndex = escapedJsonStart
+                        } else {
+                            const normalJsonStart = content.indexOf('{"type":"record"')
+                            if (normalJsonStart !== -1) {
+                                originalStartIndex = normalJsonStart
+                            }
+                        }
+                        
+                        if (originalStartIndex !== -1) {
+                            cleanedContent = content.substring(0, originalStartIndex).trim()
+                        }
+                    }
+                } catch (parseError) {}
+            }
+        }
+    } catch (error) {}
+    
+    return { recordObj, cleanedContent }
 }
 //终止输出
 const terminateFn = () => {
@@ -725,7 +904,14 @@ const handleSubmit = async () => {
         followUpQuestions: [], // 追问内容
         chatUuid: messageUuid.value,
         type: null, // 点赞点踩状态
-        quoteList: [] // 引用资料列表
+        quoteList: [], // 引用资料列表
+        showAndonButton: 0, // 按钮类型：0=不显示，1=Andon事件，2=视频监控
+        showAndonComponent: false, // 是否显示 Andon 组件
+        andonCreated: false, // 是否已创建成功
+        monitorDeviceIds: [], // 视频监控设备ID列表
+        showMonitorComponent: false, // 是否显示视频监控组件
+        showPdfComponent: false, // 是否显示 PDF 组件
+        recordObj: null // 图片记录对象（用于 imgCard 组件）
     })
 
     try {
@@ -822,7 +1008,7 @@ const getTableData = async () => {
 
 const streamResponse = async (userMessage, messageIndex) => {
     let requestBody = {}
-    if (props.chatUrl) {
+    if (props.chatUrl && props.app !== 'security') {
         // kms
         requestBody = {
             query: userMessage, // 查询内容 - 放在后面确保不被覆盖
@@ -834,7 +1020,7 @@ const streamResponse = async (userMessage, messageIndex) => {
             chatUuid: messageUuid.value // 当前回答消息的id
         }
     } else {
-        // ai上
+        // ai上 或者安防 security
         requestBody = {
             message: userMessage,
             sessionUuid: props.mode === 'aidialogue' ? (props.sessionUuid || sessionUuid.value) : sessionUuid.value,
@@ -878,6 +1064,40 @@ const streamResponse = async (userMessage, messageIndex) => {
                     const data = event.data
                     
                     if (data === '[DONE]') {
+                        // 流结束，确保移除所有标记
+                        if (list.value[messageIndex].content) {
+                            // 在移除标记前，再次检查并解析设备ID（处理分片到达的情况）
+                            const fullContent = list.value[messageIndex].content
+                            if (fullContent.includes('[type:Play')) {
+                                const deviceIds = parsePlayDeviceIds(fullContent)
+                                if (deviceIds.length > 0) {
+                                    list.value[messageIndex].monitorDeviceIds = deviceIds
+                                }
+                            }
+                            
+                            // 提取 type: record 的 JSON
+                            const { recordObj, cleanedContent: recordCleanedContent } = extractRecordJson(fullContent)
+                            if (recordObj) {
+                                list.value[messageIndex].recordObj = recordObj
+                            }
+                            
+                            // 使用提取后的清理内容
+                            const finalCleanedContent = recordCleanedContent || fullContent
+                            
+                            // 在移除标记前，再次检查所有按钮类型（处理分片到达的情况）
+                            if (finalCleanedContent.includes('[type:Andon_Create]')) {
+                                list.value[messageIndex].showAndonButton = 1 // Andon事件
+                            } else if (finalCleanedContent.includes('[type:Play')) {
+                                list.value[messageIndex].showAndonButton = 2 // 视频监控
+                            } else if (finalCleanedContent.includes('[type:Monitor') || finalCleanedContent.includes('[type:Video')) {
+                                list.value[messageIndex].showAndonButton = 2 // 视频监控（兼容旧格式）
+                            } else if (/\[\s*type\s*:\s*pdf\s*\]/i.test(finalCleanedContent)) {
+                                list.value[messageIndex].showAndonButton = 3 // PDF报告
+                            }
+                            
+                            list.value[messageIndex].content = transformSourceMarkers(finalCleanedContent)
+                        }
+
                         // 流结束
                         isStreaming.value = false
                         list.value[messageIndex] = {
@@ -905,7 +1125,22 @@ const streamResponse = async (userMessage, messageIndex) => {
                     // 尝试解析JSON数据
                     try {
                         const parsedData = JSON.parse(data)
-                        
+
+                        // 处理错误响应
+                        if (parsedData.outputType === 'error') {
+                            isStreaming.value = false
+                            list.value[messageIndex] = {
+                                ...list.value[messageIndex],
+                                content: parsedData.content || '请求出错，请稍后重试',
+                                loading: false,
+                                typing: false
+                            }
+                            // 清空文件列表并关闭header
+                            fileList.value = []
+                            closeHeader()
+                            return
+                        }
+
                         if (parsedData.outputType === 'reasoning') {
                             // 检查 content 是否为空
                             const content = parsedData.content || ''
@@ -948,8 +1183,36 @@ const streamResponse = async (userMessage, messageIndex) => {
                             } else {
                                 list.value[messageIndex].content += content
                             }
+
+                            // 检测是否包含标记，设置按钮类型
+                            const fullContent = list.value[messageIndex].content
+                            
+                            // 提取 type: record 的 JSON
+                            const { recordObj, cleanedContent: recordCleanedContent } = extractRecordJson(fullContent)
+                            if (recordObj) {
+                                list.value[messageIndex].recordObj = recordObj
+                            }
+                            
+                            // 使用提取后的清理内容
+                            const finalCleanedContent = recordCleanedContent || fullContent
+                            
+                            if (finalCleanedContent.includes('[type:Andon_Create]')) {
+                                list.value[messageIndex].showAndonButton = 1 // Andon事件
+                            } else if (finalCleanedContent.includes('[type:Play')) {
+                                list.value[messageIndex].showAndonButton = 2 // 视频监控
+                                // 解析设备ID列表
+                                const deviceIds = parsePlayDeviceIds(finalCleanedContent)
+                                if (deviceIds.length > 0) {
+                                    list.value[messageIndex].monitorDeviceIds = deviceIds
+                                }
+                            } else if (finalCleanedContent.includes('[type:Monitor') || finalCleanedContent.includes('[type:Video')) {
+                                list.value[messageIndex].showAndonButton = 2 // 视频监控（兼容旧格式）
+                            } else if (/\[\s*type\s*:\s*pdf\s*\]/i.test(finalCleanedContent)) {
+                                list.value[messageIndex].showAndonButton = 3 // PDF报告
+                            }
+
                             // 对整个累积内容进行标记移除处理
-                            list.value[messageIndex].content = transformSourceMarkers(list.value[messageIndex].content)
+                            list.value[messageIndex].content = transformSourceMarkers(finalCleanedContent)
                             list.value[messageIndex].typing = true
                             list.value[messageIndex].isFog = true
 
@@ -1320,6 +1583,27 @@ const goDetail = (id) => {
     })
 }
 
+// 显示 Andon 组件
+const handleShowAndonComponent = (item) => {
+    item.showAndonComponent = true
+}
+
+// Andon 创建成功回调
+const handleAndonSuccess = (item) => {
+    item.showAndonComponent = false
+    item.andonCreated = true
+}
+
+// 视频监控处理
+const handleVideoMonitor = (item) => {
+    item.showMonitorComponent = true
+}
+
+// pdf报告
+const handlePdfReport = (item) => {
+    item.showPdfComponent = true
+}
+
 // 复制
 const handleCopy = async (item) => {
     try {
@@ -1362,6 +1646,45 @@ const handleCopy = async (item) => {
     }
 }
 
+// 添加图片点击事件
+const addImageClickEvents = () => {
+    nextTick(() => {
+        // 查找所有 markdown 内容中的图片
+        const markdownImages = document.querySelectorAll('.markdown-body img, .el-bubble-content img, .elx-xmarkdown-provider img')
+        
+        markdownImages.forEach((img) => {
+            // 移除旧的事件监听器（如果有）
+            const newImg = img.cloneNode(true)
+            img.parentNode.replaceChild(newImg, img)
+            
+            // 添加样式使图片可点击
+            newImg.style.cursor = 'pointer'
+            newImg.style.transition = 'transform 0.2s'
+            
+            // 鼠标悬停效果
+            newImg.addEventListener('mouseenter', () => {
+                newImg.style.transform = 'scale(1.02)'
+            })
+            newImg.addEventListener('mouseleave', () => {
+                newImg.style.transform = 'scale(1)'
+            })
+            
+            // 点击图片打开预览
+            newImg.addEventListener('click', (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                currentImageUrl.value = newImg.src
+                showImageViewer.value = true
+            })
+        })
+    })
+}
+
+// 关闭图片预览
+const closeImageViewer = () => {
+    showImageViewer.value = false
+}
+
 // Watch
 watch(() => props.assistant, (newVal) => {
     console.log('newVal', newVal)
@@ -1376,6 +1699,12 @@ watch(() => props.assistant, (newVal) => {
         updateTableFields()
     }
 }, { immediate: true, deep: true })
+
+// 监听 list 变化，为新内容添加图片点击事件并同步到父组件
+watch(() => list.value, (newList) => {
+    addImageClickEvents()
+    emit('update:list', [...newList])
+}, { deep: true })
 
 // watch(() => props.modelData, (newVal) => {
 // }, { immediate: true, deep: true })
@@ -1402,6 +1731,8 @@ defineExpose({
         }) : newList
         list.value = parsed
         console.log('newList', parsed)
+        // 添加图片点击事件
+        addImageClickEvents()
     },
     scrollToBottom: () => {
         // 这里可以添加滚动到底部的方法
@@ -1939,6 +2270,19 @@ onBeforeUnmount(() => {
     margin-bottom: 0;
 }
 
+:deep(.markdown-body) {
+    img[alt="source-marker-doc"],
+    img[alt="source-marker-qa"] {
+        width: 12px; /* Adjust as needed */
+        height: 12px; /* Adjust as needed */
+        vertical-align: middle;
+        margin-left: 4px;
+        padding-bottom: 4px; /* Add padding-bottom */
+        display: inline-block;
+        box-sizing: content-box;
+    }
+}
+
 /* 引用资料相关样式 */
 .agent-container {
     display: flex;
@@ -2183,7 +2527,28 @@ onBeforeUnmount(() => {
    }
 :deep(.elx-xmarkdown-provider) {
     img {
-       max-width: 400px !important; 
+       max-width: 400px !important;
+       cursor: pointer;
+       transition: transform 0.2s ease;
+       
+       &:hover {
+           transform: scale(1.02);
+           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+       }
     }
+}
+
+/* markdown 图片预览样式优化 */
+:deep(.markdown-body img),
+:deep(.el-bubble-content img) {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 4px;
+}
+
+:deep(.markdown-body img:hover),
+:deep(.el-bubble-content img:hover) {
+    transform: scale(1.02);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 </style> 

@@ -174,6 +174,7 @@ public class ChatSessionQaService extends MPJBaseServiceImpl<ChatSessionQaMapper
             vo.setFileLists(fileUrls);
         }
         
+        // TODO: 设置推荐的知识库列表
         vo.setRecommendKnowledgeBases(List.of());
         
         return vo;

@@ -132,8 +132,31 @@ public class MarkdownSplitter {
 
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
-            boolean isTableLine = line.contains("|") && line.split("\\|").length >= 3;
-            boolean isSeparator = line.contains("---") && line.contains("|");
+            String trimmedLine = line.trim();
+            
+            // 更健壮的表格行检测逻辑
+            // 1. 必须包含管道符
+            // 2. 使用 -1 参数确保 split 包含末尾空字符串，防止因末尾空单元格导致列数计算错误
+            // 3. 至少有2个管道符（即至少1列，如 | data |）或者如果不以管道符开头结尾，至少有1个分隔符（data | data）
+            boolean hasPipe = line.contains("|");
+            boolean isTableLine = false;
+            
+            if (hasPipe) {
+                int pipeCount = line.length() - line.replace("|", "").length();
+                // 如果以管道符开头，通常是规范的Markdown表格
+                if (trimmedLine.startsWith("|")) {
+                     isTableLine = pipeCount >= 2;
+                } else {
+                    // 如果不以管道符开头，可能是简写形式，要求列数>=2 (即至少1个中间的管道符)
+                    // 但为了保险，我们主要针对规范表格，或者至少看起来像表格的行
+                    // 这里使用 split 长度判断，split长度 = 管道符数 + 1 (如果首尾都没有管道符)
+                    // 比如 a | b -> ["a ", " b"] len=2
+                    isTableLine = line.split("\\|", -1).length >= 2;
+                }
+            }
+            
+            // 分隔行检测 (|---|---|)
+            boolean isSeparator = trimmedLine.contains("---") && trimmedLine.contains("|");
 
             if (isTableLine || isSeparator) {
                 if (currentTableStart == null) {
@@ -156,33 +179,16 @@ public class MarkdownSplitter {
     }
 
     /**
-     * 估算token数量
+     * 估算token数量（按字符数计算）
      */
     public int estimateTokens(String text) {
         if (text == null || text.isEmpty()) {
             return 0;
         }
 
-        // 中文字符数
-        Matcher chineseMatcher = CHINESE_CHAR_PATTERN.matcher(text);
-        int chineseChars = 0;
-        while (chineseMatcher.find()) {
-            chineseChars++;
-        }
-
-        // 英文单词数
-        Matcher englishMatcher = ENGLISH_WORD_PATTERN.matcher(text);
-        int englishWords = 0;
-        while (englishMatcher.find()) {
-            englishWords++;
-        }
-
-        // 其他字符
-        int totalLength = text.length();
-        int englishChars = text.replaceAll("[^a-zA-Z\\s]", "").length();
-        int otherChars = totalLength - chineseChars - englishChars;
-
-        return chineseChars + englishWords + Math.max(1, otherChars / 4);
+        // 直接返回字符数作为token数
+        // embedding模型的token是按字符计算的
+        return text.length();
     }
 
     /**
@@ -217,7 +223,7 @@ public class MarkdownSplitter {
 
                 // 添加重叠
                 if (overlap > 0) {
-                    finalChunks = addOverlapToChunks(finalChunks, overlap);
+                    finalChunks = addOverlapToChunks(finalChunks, overlap, maxTokens);
                 }
                 return finalChunks;
             }
@@ -356,9 +362,54 @@ public class MarkdownSplitter {
                         currentChunkLines = new ArrayList<>(tableLines);
                         currentTokens = tableTokens;
                     } else {
-                        // 表格太大，单独保存
-                        String restoredTable = restoreMarkdownSyntax(tableText, placeholders);
-                        chunks.add(restoredTable);
+                        // 表格太大，进行按行分割，每段都保留表头
+                        List<String> headerLines = new ArrayList<>();
+                        List<String> bodyLines = new ArrayList<>();
+
+                        // 识别表头（通常前两行是表头和分隔符）
+                        if (tableLines.size() >= 2 && tableLines.get(1).contains("---")) {
+                            headerLines.add(tableLines.get(0));
+                            headerLines.add(tableLines.get(1));
+                            for (int k = 2; k < tableLines.size(); k++) bodyLines.add(tableLines.get(k));
+                        } else if (!tableLines.isEmpty()) {
+                            // 只有一行或者没有标准分隔符，默认第一行为头
+                            headerLines.add(tableLines.get(0));
+                            for (int k = 1; k < tableLines.size(); k++) bodyLines.add(tableLines.get(k));
+                        }
+
+                        String headerText = String.join("\n", headerLines);
+                        int headerTokens = estimateTokens(headerText);
+
+                        List<String> currentTableChunk = new ArrayList<>(headerLines);
+                        int currentTableChunkTokens = headerTokens;
+
+                        for (String row : bodyLines) {
+                            int rowTokens = estimateTokens(row);
+                            // +1 是为了计算换行符
+                            if (currentTableChunkTokens + rowTokens + 1 > maxTokens && currentTableChunk.size() > headerLines.size()) {
+                                // 当前片段已满，保存
+                                String chunkText = String.join("\n", currentTableChunk);
+                                if (!chunkText.trim().isEmpty()) {
+                                    chunks.add(restoreMarkdownSyntax(chunkText, placeholders));
+                                }
+
+                                // 开启新片段，重置为仅包含表头
+                                currentTableChunk = new ArrayList<>(headerLines);
+                                currentTableChunkTokens = headerTokens;
+                            }
+
+                            currentTableChunk.add(row);
+                            currentTableChunkTokens += rowTokens + 1;
+                        }
+
+                        // 保存最后一个片段
+                        if (currentTableChunk.size() > headerLines.size()) {
+                            String chunkText = String.join("\n", currentTableChunk);
+                            if (!chunkText.trim().isEmpty()) {
+                                chunks.add(restoreMarkdownSyntax(chunkText, placeholders));
+                            }
+                        }
+
                         currentChunkLines = new ArrayList<>();
                         currentTokens = 0;
                     }
@@ -378,8 +429,10 @@ public class MarkdownSplitter {
                 // 保存当前chunk
                 if (!currentChunkLines.isEmpty()) {
                     String chunkText = String.join("\n", currentChunkLines);
-                    String restoredChunk = restoreMarkdownSyntax(chunkText, placeholders);
-                    chunks.add(restoredChunk);
+                    if (!chunkText.trim().isEmpty()) {
+                        String restoredChunk = restoreMarkdownSyntax(chunkText, placeholders);
+                        chunks.add(restoredChunk);
+                    }
 
                     currentChunkLines = new ArrayList<>();
                     currentChunkLines.add(line);
@@ -387,14 +440,19 @@ public class MarkdownSplitter {
                 } else {
                     // 单行超过限制，强制分割
                     if (lineTokens > maxTokens) {
-                        String truncated = line.substring(0, Math.min(maxTokens, line.length()));
-                        String remaining = line.substring(Math.min(maxTokens, line.length()));
-
-                        String restoredTruncated = restoreMarkdownSyntax(truncated, placeholders);
-                        chunks.add(restoredTruncated);
-
-                        lines[i] = remaining;
-                        continue;
+                        // 按maxTokens分割行内容
+                        int start = 0;
+                        while (start < line.length()) {
+                            int end = Math.min(start + maxTokens, line.length());
+                            String part = line.substring(start, end);
+                            if (!part.trim().isEmpty()) {
+                                String restoredPart = restoreMarkdownSyntax(part, placeholders);
+                                chunks.add(restoredPart);
+                            }
+                            start = end;
+                        }
+                        currentChunkLines = new ArrayList<>();
+                        currentTokens = 0;
                     } else {
                         currentChunkLines.add(line);
                         currentTokens = lineTokens;
@@ -408,13 +466,15 @@ public class MarkdownSplitter {
         // 处理最后一个chunk
         if (!currentChunkLines.isEmpty()) {
             String chunkText = String.join("\n", currentChunkLines);
-            String restoredChunk = restoreMarkdownSyntax(chunkText, placeholders);
-            chunks.add(restoredChunk);
+            if (!chunkText.trim().isEmpty()) {
+                String restoredChunk = restoreMarkdownSyntax(chunkText, placeholders);
+                chunks.add(restoredChunk);
+            }
         }
 
         // 添加重叠内容
         if (overlap > 0) {
-            chunks = addOverlapToChunks(chunks, overlap);
+            chunks = addOverlapToChunks(chunks, overlap, maxTokens);
         }
 
         return chunks;
@@ -423,7 +483,7 @@ public class MarkdownSplitter {
     /**
      * 为chunks添加重叠内容
      */
-    public List<String> addOverlapToChunks(List<String> chunks, int overlapSize) {
+    public List<String> addOverlapToChunks(List<String> chunks, int overlapSize, int maxTokens) {
         if (chunks == null || chunks.isEmpty() || overlapSize <= 0) {
             return chunks;
         }
@@ -459,6 +519,13 @@ public class MarkdownSplitter {
                 }
 
                 String overlappedChunk = overlapText.toString().trim() + "\n\n" + chunk;
+
+                // 检查添加重叠后是否超过maxTokens，如果超过则截断
+                if (estimateTokens(overlappedChunk) > maxTokens) {
+                    // 截断到maxTokens长度
+                    overlappedChunk = overlappedChunk.substring(0, Math.min(maxTokens, overlappedChunk.length()));
+                }
+
                 overlapped.add(overlappedChunk);
             }
         }
@@ -538,7 +605,7 @@ public class MarkdownSplitter {
 
         // 4. 添加重叠内容
         if (overlap > 0) {
-            restoredChunks = addOverlapToChunks(restoredChunks, overlap);
+            restoredChunks = addOverlapToChunks(restoredChunks, overlap, maxTokens);
         }
 
         return createSplitResults(restoredChunks, overlap, "paragraph");

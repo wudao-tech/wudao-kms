@@ -110,6 +110,7 @@ public class CommentNotificationAspect {
             log.warn("获取知识文件创建者失败: targetId={}", targetId, e);
         }
 
+        // TODO: 根据实际业务添加其他类型的处理
         // 例如：assistant、article 等
 
         return null;

@@ -123,7 +123,7 @@ public class CoverGenerationService {
             }
             
             if (coverBytes != null) {
-                String coverPath = "cover/" + LocalDate.now().format(DateFormats.yyyyMMdd) + "/" + LocalTime.now().format(DateFormats.STANDARD_TIME) + FileUtil.getName(knowledgeFile.getFileName()) + ".png";
+                String coverPath = "cover/" + LocalDate.now().format(DateFormats.yyyyMMdd) + "/" + LocalTime.now().format(DateFormats.STANDARD_TIME) + knowledgeFile.getFileName();
                  ossService.putObject(coverBytes, coverPath);
                 log.info("封面生成成功，文件: {}, 路径: {}", knowledgeFile.getFileName(), coverPath);
                 return ossService.getHttpUrl(coverPath);

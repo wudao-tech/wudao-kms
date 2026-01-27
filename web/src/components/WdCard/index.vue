@@ -8,7 +8,7 @@
                 <div class="title-row">
                     <span class="text-ellipsis title-name">{{ name }}</span>
                     <div class="title-actions">
-                        <span v-if="status !== undefined" class="status" :style="{ color: status === 1 ? '#6B05A8' : '#838383'}">{{ status === 1 ? '已发布' : '草稿' }}</span>
+                        <span v-if="status !== undefined" class="status" :style="{ color: status === 1 || status === 3 ? '#6B05A8' : '#838383'}">{{ getStatus(status) }}</span>
                         <slot name="opt"></slot>
                     </div>
                 </div>
@@ -75,6 +75,18 @@ const displayTag = computed(() => {
     }
     return props.tag
 })
+
+const getStatus = (status) => {
+    if (status === 1) {
+        return '已发布'
+    } else if (status === 2) {
+        return '草稿'
+    } else if (status === 3) {
+        return '正常'
+    } else {
+        return '异常'
+    }
+}
 
 const handleCardClick = () => {
     emit('click')

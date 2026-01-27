@@ -1,6 +1,7 @@
 package com.wudao.kms.service;
 
 import cn.hutool.core.collection.CollUtil;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.yulichang.base.MPJBaseServiceImpl;
@@ -15,6 +16,7 @@ import com.wudao.common.utils.edoc.CsvUtils;
 import com.wudao.common.utils.edoc.Getters;
 import com.wudao.kms.agent.domain.Assistant;
 import com.wudao.kms.entity.Feedback;
+import com.wudao.kms.entity.QaImprove;
 import com.wudao.kms.mapper.FeedbackMapper;
 import com.wudao.security.utils.SecurityUtils;
 import jakarta.servlet.http.HttpServletResponse;
@@ -35,6 +37,7 @@ public class FeedbackService extends MPJBaseServiceImpl<FeedbackMapper, Feedback
         wrapper.selectAll(Feedback.class);
         wrapper.selectAs(Assistant::getName, Feedback::getAgentName);
         wrapper.selectAs(SysUser::getNickname, Feedback::getCreatedByName);
+        wrapper.selectAs(QaImprove::getReviewStatus, Feedback::getQaReviewStatus);
         wrapper.eq(StringUtils.isNotEmpty(feedback.getType()), Feedback::getType, feedback.getType());
         wrapper.ge(feedback.getStartTime() != null, Feedback::getCreateTime, feedback.getStartTime());
         wrapper.le(feedback.getStartTime() != null, Feedback::getCreateTime, feedback.getEndTime());
@@ -44,9 +47,11 @@ public class FeedbackService extends MPJBaseServiceImpl<FeedbackMapper, Feedback
         wrapper.eq(StringUtils.isNotEmpty(feedback.getType()), Feedback::getType, feedback.getType());
         wrapper.eq(StringUtils.isNotEmpty(feedback.getAgentUuid()), Feedback::getAgentUuid, feedback.getAgentUuid());
         wrapper.eq(StringUtils.isNotEmpty(feedback.getAdoptionStatus()), Feedback::getAdoptionStatus, feedback.getAdoptionStatus());
-        wrapper.orderByDesc("create_time");
+        wrapper.eq(StringUtils.isNotEmpty(feedback.getQaReviewStatus()), QaImprove::getReviewStatus, feedback.getQaReviewStatus());
+        wrapper.orderByDesc(Feedback::getCreateTime);
         wrapper.leftJoin(SysUser.class, SysUser::getId, Feedback::getCreatedBy);
-        wrapper.leftJoin(Assistant.class,  Assistant::getUuid, Feedback::getAgentUuid);
+        wrapper.leftJoin(Assistant.class, Assistant::getUuid, Feedback::getAgentUuid);
+        wrapper.leftJoin(QaImprove.class, QaImprove::getFeedbackId, Feedback::getId);
         IPage<Feedback> pageResult = this.page(new Page<>(page.getPageNum(), page.getPageSize()), wrapper);
         page.setRecords(pageResult.getRecords());
         page.setTotal(pageResult.getTotal());
@@ -60,6 +65,13 @@ public class FeedbackService extends MPJBaseServiceImpl<FeedbackMapper, Feedback
         feedback.setOptimizationFlag(true);
         this.updateById(feedback);
         return R.ok();
+    }
+
+    public void updateStatus(List<Long> id, String type){
+        LambdaUpdateWrapper<Feedback> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.in(Feedback::getId, id);
+        updateWrapper.set(Feedback::getAdoptionStatus, type);
+        this.update(updateWrapper);
     }
 
     public R<Void> delete(List<Long> ids) {

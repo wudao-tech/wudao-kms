@@ -109,7 +109,7 @@ public class MarkdownSplitService {
                                                  String customSeparators, String segmentType, Integer maxParagraph) {
         // 参数验证和默认值设置
         int actualMaxTokens = validateMaxTokens(maxTokens);
-        int actualOverlap = validateOverlap(overlap, actualMaxTokens);
+        int actualOverlap = 0;
         String actualCustomSeps = (customSeparators != null) ? customSeparators : "";
         String actualSegmentType = (segmentType != null) ? segmentType : "contentSize";
 
@@ -139,57 +139,6 @@ public class MarkdownSplitService {
     }
 
     /**
-     * 分段Markdown文档并返回对象（通过文件路径）
-     *
-     * @param markdownFilePath markdown文件路径
-     * @param maxTokens        最大token数
-     * @param overlap          重叠token数
-     * @param customSeparators 自定义分隔符
-     * @return 分段结果对象
-     */
-    public SplitResponse splitMarkdownFromFileAsObject(String markdownFilePath, Integer maxTokens, Integer overlap, String customSeparators) {
-        try {
-            String content = FileUtil.readUtf8String(markdownFilePath);
-            if (content == null || content.trim().isEmpty()) {
-                return new SplitResponse(new ArrayList<>(), 0, false, "文件内容为空");
-            }
-
-            return splitMarkdownFromContentAsObject(content, maxTokens, overlap, customSeparators);
-
-        } catch (Exception e) {
-            log.error("读取文件失败: {}", markdownFilePath, e);
-            return new SplitResponse(new ArrayList<>(), 0, false, "读取文件失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 分段Markdown文档并返回对象（通过内容字符串）
-     *
-     * @param content          markdown内容
-     * @param maxTokens        最大token数
-     * @param overlap          重叠token数
-     * @param customSeparators 自定义分隔符
-     * @return 分段结果对象
-     */
-    public SplitResponse splitMarkdownFromContentAsObject(String content, Integer maxTokens, Integer overlap, String customSeparators) {
-        try {
-            int actualMaxTokens = validateMaxTokens(maxTokens);
-            int actualOverlap = validateOverlap(overlap, actualMaxTokens);
-            String actualCustomSeps = (customSeparators != null) ? customSeparators : "";
-
-            MarkdownSplitter splitter = new MarkdownSplitter();
-            List<MarkdownSplitter.SplitResult> splitResults = splitter.splitMarkdownText(
-                    content, actualMaxTokens, actualOverlap, actualCustomSeps);
-
-            return createSuccessResponse(splitResults);
-
-        } catch (Exception e) {
-            log.error("分段处理失败", e);
-            return new SplitResponse(new ArrayList<>(), 0, false, "处理文档时发生错误: " + e.getMessage());
-        }
-    }
-
-    /**
      * 验证maxTokens参数
      */
     private int validateMaxTokens(Integer maxTokens) {
@@ -199,28 +148,16 @@ public class MarkdownSplitService {
         }
         return maxTokens;
     }
-
-    /**
-     * 验证overlap参数
-     */
-    private int validateOverlap(Integer overlap, int maxTokens) {
-        if (overlap == null || overlap < 0) {
-            log.warn("overlap参数无效: {}, 使用默认值100", overlap);
-            return 100;
-        }
-        if (overlap >= maxTokens) {
-            log.warn("overlap({})不能大于等于maxTokens({}), 调整为maxTokens的一半", overlap, maxTokens);
-            return maxTokens / 2;
-        }
-        return overlap;
-    }
-
     /**
      * 创建成功响应
      */
     private SplitResponse createSuccessResponse(List<MarkdownSplitter.SplitResult> splitResults) {
         List<Map<String, Object>> chunks = new ArrayList<>();
         for (MarkdownSplitter.SplitResult result : splitResults) {
+            // 过滤空内容
+            if (result.content == null || result.content.trim().isEmpty()) {
+                continue;
+            }
             Map<String, Object> chunk = new HashMap<>();
             chunk.put("content", result.content);
             chunk.put("metadata", result.metadata);

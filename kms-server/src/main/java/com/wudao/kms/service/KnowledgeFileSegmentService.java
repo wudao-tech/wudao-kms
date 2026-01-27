@@ -17,6 +17,7 @@ import com.wudao.kms.llm.llmmode.domain.LLMModel;
 import com.wudao.kms.llm.llmmode.service.LLMModelService;
 import com.wudao.kms.mapper.KnowledgeFileSegmentMapper;
 import com.wudao.kms.vo.KnowledgeFileSegmentVO;
+import com.wudao.security.utils.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,11 +66,22 @@ public class KnowledgeFileSegmentService extends MPJBaseServiceImpl<KnowledgeFil
             llmWrapper.last("limit 1");
             LLMModel llmModel = llmModelService.getOne(llmWrapper);
             ChatModelStrategy strategyFactoryStrategy = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode());
-            // 向量化处理（由 Strategy 内部处理分段）
+            // 向量化处理（按4个一组分批处理）
             List<String> contents = fileSegments.stream().map(KnowledgeFileSegment::getSegmentContent).toList();
-            List<float[]> embeddings = strategyFactoryStrategy.embedding(llmModel.getModel(), contents);
+
+            // 分批处理，每批最多4个
+            List<List<String>> batches = CollUtil.split(contents, 4);
+            List<float[]> allEmbeddings = new ArrayList<>();
+
+            for (List<String> batch : batches) {
+                // 批量调用embedding
+                List<float[]> batchEmbeddings = strategyFactoryStrategy.embedding(llmModel.getModel(), batch, SecurityUtils.getUserId());
+                allEmbeddings.addAll(batchEmbeddings);
+            }
+
+            // 更新分段的向量
             for (int i = 0; i < fileSegments.size(); i++) {
-                fileSegments.get(i).setVector(embeddings.get(i));
+                fileSegments.get(i).setVector(allEmbeddings.get(i));
             }
             this.updateBatchById(fileSegments);
         }

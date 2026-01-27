@@ -77,8 +77,11 @@
             <div class="document-actions" style="align-items: center;">
               <!-- <el-button size="small" link style="margin-right: 20px;" @click="viewOriginalFile">查看原始文档</el-button> -->
               <el-tooltip :content="isFavorite ? '取消收藏' : '收藏'" placement="top">
-                <el-icon v-if="!isFavorite" style="font-size: 21px; cursor: pointer;" @click="favoriteFn(true)"><star /></el-icon>
-                <el-icon v-else style="font-size: 25px; cursor: pointer; color: #FFA401;" @click="favoriteFn(false)"><StarFilled /></el-icon>
+                <el-icon v-if="!isFavorite" style="font-size: 21px; cursor: pointer; margin-right: 15px;" @click="favoriteFn(true)"><Star /></el-icon>
+                <el-icon v-else style="font-size: 25px; cursor: pointer; color: #FFA401; margin-right: 15px;" @click="favoriteFn(false)"><StarFilled /></el-icon>
+              </el-tooltip>
+              <el-tooltip content="分享" placement="top">
+                <el-icon style="font-size: 21px; cursor: pointer;" @click="handleShare"><Share /></el-icon>
               </el-tooltip>
               <!-- <svg  @click="downloadFile" style="width: 25px; height: 25px; cursor: pointer;" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" class="iconify iconify--ic" width="32" height="32" preserveAspectRatio="xMidYMid meet" viewBox="0 0 24 24" data-v-133a2e38=""><path d="M18 15v3H6v-3H4v3c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-3h-2zm-1-4l-1.41-1.41L13 12.17V4h-2v8.17L8.41 9.59L7 11l5 5l5-5z"></path></svg> -->
             </div>
@@ -89,7 +92,15 @@
             :file-name="detail.fileName"
             placeholder="暂无文件预览"
             @download="downloadFile"
+            style="flex: 1;"
           />
+          <div v-if="isAudioOrVideo" style="flex: 1; overflow-y: auto;">
+            <parseMd 
+              ref="parseMdRef"
+              :fileId="detail.id"
+              :permission="false"
+            />
+          </div>
         </div>
      </div>
       
@@ -125,18 +136,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
-import { StarFilled } from '@element-plus/icons-vue'
+import { ref, onMounted, nextTick, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { StarFilled, Share, Star } from '@element-plus/icons-vue'
 import { useRouter, useRoute } from 'vue-router'
-import { listUser } from '@/api/system/user'
+import { listUserByDeptId } from '@/api/system/user'
 import { fileDetail, updateFileContent } from '@/api/base'
 import { addFavorite, cancelFavorite, checkFavorite } from '@/api/retrieve'
 import Comment from '@/components/comment/index.vue'
 import { addComment } from '@/api/comment'
 import moment from 'moment'
 import FilePreview from '@/components/FilePreview/index.vue'
-
+import parseMd from '@/views/knowledge/components/parseMd.vue'
 const target = 'knowledge'
 
 const url = import.meta.env.VITE_APP_BASE_API
@@ -161,10 +172,35 @@ const assistantVisible = ref(true)
 const commentRef = ref(null)
 const commentVisible = ref(false)
 
+// 判断文件是否为音频或视频
+const isAudioOrVideo = computed(() => {
+  if (!detail.value.fileName) return false
+  const fileName = detail.value.fileName.toLowerCase()
+  const ext = fileName.split('.').pop()
+  
+  // 音频文件扩展名
+  const audioExts = ['mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg', 'wma', 'amr']
+  // 视频文件扩展名
+  const videoExts = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', 'm4v', '3gp', 'rm', 'rmvb']
+  
+  return audioExts.includes(ext) || videoExts.includes(ext)
+})
+
 
 const goBack = () => {
-  // 检查是否从搜索结果页面进入的详情页
-  if (route.query.fromSearch === 'true') {
+  // 检查是否从命中测试页面进入的详情页
+  if (route.query.fromHitTesting === 'true') {
+    console.log('返回到知识库详情页面（命中测试tab）...')
+    router.push({
+      path: '/space/knowledge',
+      query: {
+        id: route.query.knowledgeBaseId,
+        spaceId: route.query.spaceId,
+        tab: route.query.tab || 2,  // 命中测试的tab索引
+        type: 3
+      }
+    })
+  } else if (route.query.fromSearch === 'true') {
     console.log('返回到搜索结果页面，携带状态参数...')
     // 携带所有搜索状态参数返回到检索页面
     const searchState = {
@@ -319,14 +355,65 @@ const favoriteFn = async(type) => {
   }
 }
 
+// 分享功能
+const handleShare = () => {
+  // 使用文件链接作为分享链接
+  if (!originalFile.value) {
+    ElMessage.warning('文件链接未加载，请稍后再试')
+    return
+  }
+  
+  // 构建完整的分享 URL（包含域名）
+  let shareUrl = originalFile.value
+  // 如果 originalFile.value 不是完整的 URL（不以 http:// 或 https:// 开头），则使用当前域名
+  if (!shareUrl.startsWith('http://') && !shareUrl.startsWith('https://')) {
+    shareUrl = window.location.origin + shareUrl
+  }
+  console.log('shareUrl', shareUrl)
+  // 复制到剪贴板
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      ElMessage.success('文件链接已复制到剪贴板')
+    }).catch(() => {
+      // 降级方案：使用传统方法复制
+      copyToClipboard(shareUrl)
+    })
+  } else {
+    // 降级方案：使用传统方法复制
+    copyToClipboard(shareUrl)
+  }
+}
+
+// 传统方法复制到剪贴板（降级方案）
+const copyToClipboard = (text) => {
+  const textArea = document.createElement('textarea')
+  textArea.value = text
+  textArea.style.position = 'fixed'
+  textArea.style.left = '-999999px'
+  textArea.style.top = '-999999px'
+  document.body.appendChild(textArea)
+  textArea.focus()
+  textArea.select()
+  
+  try {
+    const successful = document.execCommand('copy')
+    if (successful) {
+      ElMessage.success('文件链接已复制到剪贴板')
+    }
+  } catch (err) {
+    console.error('复制失败:', err)
+  } finally {
+    document.body.removeChild(textArea)
+  }
+}
 
 onMounted(async () => {
   const res = await fileDetail(route.query.id)
   detail.value = res.data
   originalFile.value = url + detail.value.filePath.replace('uploadPath/', 'profile/')
-  console.log(' originalFile.value', originalFile.value, detail.value.fileName)
+  console.log('originalFile.value', originalFile.value)
   tags.value = detail.value.tags ? detail.value.tags.split(',') : []
-  const resUser = await listUser()
+  const resUser = await listUserByDeptId()
   userList.value = resUser.data
   let userId = JSON.parse(localStorage.getItem('userInfo')).id
   if (userId === detail.value.createdBy) {
@@ -601,6 +688,7 @@ onMounted(async () => {
   background: #fafafa;
   overflow: auto;
   height: calc(100% - 56px);
+  display: flex;
 }
 
 .right-assistant {

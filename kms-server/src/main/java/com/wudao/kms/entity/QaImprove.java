@@ -37,4 +37,6 @@ public class QaImprove {
     private String generateType;
     @TableField(exist = false)
     private String createByName;
+    @Schema(description = "关联的反馈ID")
+    private Long feedbackId;
 }

@@ -63,7 +63,18 @@
         :assistant="formData"
         mode="aidialogue"
         :chatUrl="chatUrl"
+        style="width: calc(100% - 280px);"
         @new-chat="handleNewChat"
+    />
+
+    <!-- 图片预览 -->
+    <el-image-viewer
+        v-if="showImageViewer"
+        :url-list="[currentImageUrl]"
+        :initial-index="0"
+        @close="closeImageViewer"
+        :teleported="true"
+        :z-index="3000"
     />
   </div>
 </template>
@@ -71,6 +82,7 @@
 <script setup>
 // 可根据实际需要引入element-plus组件
 import { BubbleList, Sender } from 'vue-element-plus-x'
+import { ElImageViewer } from 'element-plus'
 import { updateAssistant, getAssistantDetail } from '@/api/knowledgeExpert'
 import { getToken } from '@/utils/auth'
 import robotAvatar from '@/assets/images/robot.png'
@@ -88,7 +100,7 @@ import {
     getSessionDetail
 } from '@/api/retrieve'
 import { useRoute, useRouter } from 'vue-router'
-import { nextTick } from 'vue'
+import { nextTick, onMounted, watch } from 'vue'
 
 const bubbleListRef = ref(null)
 const aiDialogueRef = ref(null)
@@ -106,6 +118,10 @@ const todayList = ref([])
 const historyList = ref([])
 const modeData = ref({})
 const formData = ref({})
+
+// 图片预览相关
+const showImageViewer = ref(false)
+const currentImageUrl = ref('')
 
 const fileUploadFn = (req) => {
     const file = req.file
@@ -155,6 +171,15 @@ const handleEnter = (i) => {
 }
 
 const handleNewChat = (resolve) => {
+    // 如果当前已有对话且对话内容为空，不再创建新对话
+    if (sessionUuid.value && list.value.length === 0) {
+        // 如果有 resolve 回调，调用它表示新对话已经就绪
+        if (resolve && typeof resolve === 'function') {
+            resolve()
+        }
+        return
+    }
+
     createSession({
         userId: userId.value,
         sessionName: '新对话',
@@ -170,7 +195,7 @@ const handleNewChat = (resolve) => {
                 aiDialogueRef.value.setList([])
             }
             // 如果有 resolve 回调，调用它表示新对话创建完成
-            if (resolve) {
+            if (resolve && typeof resolve === 'function') {
                 resolve()
             }
         })
@@ -231,7 +256,7 @@ const handleDetail = (i) => {
             // 添加AI回复
             if (item.agent) {
                 let content = item.agent
-                
+                content = '上传模型弹窗用于上传外部训练的AI模型，其界面包含以下必填字段：\n\n- **模型名称**：文本输入，用于设置模型的显示名称\n- **模型类型**：下拉选择，用于选择模型分类\n- **文件上传**：文件选择，用于上传模型文件\n- **描述**：多行文本，用于填写模型的详细说明信息\n\n弹窗界面如下图所示：\n\n![](https://oss-kms-static-uat-bucket-hangzhou.oss-cn-hangzhou.aliyuncs.com/wudao/kms/mineru-images/2025-12-14/55b586e7-f0cf-47ea-8ca4-452dd0512c08.jpg)[type:doc,chunkId:40877]'
                 // 如果有引用资料，在内容后添加引用显示
                 if (item.quoteList && item.quoteList.length > 0) {
                     // 使用WdAgent组件的方法生成引用资料HTML
@@ -270,8 +295,49 @@ const handleDetail = (i) => {
             if (aiDialogueRef.value) {
                 aiDialogueRef.value.setList([...arr])
             }
+            // 添加图片点击事件
+            addImageClickEvents()
         })
     })
+}
+
+// 添加图片点击事件
+const addImageClickEvents = () => {
+    nextTick(() => {
+        // 查找所有 markdown 内容中的图片
+        const markdownImages = document.querySelectorAll('.markdown-body img, .el-bubble-content img')
+        
+        markdownImages.forEach((img) => {
+            // 移除旧的事件监听器（如果有）
+            const newImg = img.cloneNode(true)
+            img.parentNode.replaceChild(newImg, img)
+            
+            // 添加样式使图片可点击
+            newImg.style.cursor = 'pointer'
+            newImg.style.transition = 'transform 0.2s'
+            
+            // 鼠标悬停效果
+            newImg.addEventListener('mouseenter', () => {
+                newImg.style.transform = 'scale(1.02)'
+            })
+            newImg.addEventListener('mouseleave', () => {
+                newImg.style.transform = 'scale(1)'
+            })
+            
+            // 点击图片打开预览
+            newImg.addEventListener('click', (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                currentImageUrl.value = newImg.src
+                showImageViewer.value = true
+            })
+        })
+    })
+}
+
+// 关闭图片预览
+const closeImageViewer = () => {
+    showImageViewer.value = false
 }
 
 const handleClearAllSession = () => {
@@ -316,8 +382,12 @@ const getHistoryList = () => {
 onMounted(() => {
     getDetail()
     userId.value = JSON.parse(localStorage.getItem('userInfo')).id
-   
 })
+
+// 监听 list 变化，为新内容添加图片点击事件
+watch(() => list.value, () => {
+    addImageClickEvents()
+}, { deep: true })
 </script>
 
 <style scoped lang="scss">
@@ -481,4 +551,17 @@ onMounted(() => {
     margin-bottom: 0;
 }
 
+/* 图片预览样式优化 */
+:deep(.markdown-body img),
+:deep(.el-bubble-content img) {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 4px;
+}
+
+:deep(.markdown-body img:hover),
+:deep(.el-bubble-content img:hover) {
+    transform: scale(1.02);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
 </style>

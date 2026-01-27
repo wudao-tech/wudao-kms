@@ -90,6 +90,7 @@ public class KnowledgeBaseService extends MPJBaseServiceImpl<KnowledgeBaseMapper
         LambdaQueryWrapper<KnowledgeBase> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(queryDTO.getName() != null, KnowledgeBase::getName, queryDTO.getName())
                 .eq(queryDTO.getStatus() != null, KnowledgeBase::getStatus, queryDTO.getStatus())
+                .eq(queryDTO.getOnlyMe() != null, KnowledgeBase::getCreatedBy, SecurityUtils.getUserId())
                 .in(KnowledgeBase::getId, accessibleKnowledgeBaseIds)
                 //tags是list，库里是存的1,1,3,5 需要调用函数进行contains
                 .apply(StringUtil.isNotBlank(queryDTO.getTags()), "string_to_array(tags, ',')::TEXT[] && string_to_array({0}, ',')::TEXT[]", queryDTO.getTags())
@@ -239,6 +240,7 @@ public class KnowledgeBaseService extends MPJBaseServiceImpl<KnowledgeBaseMapper
         if (result && knowledgeBase.getId() != null) {
             // 创建默认的超级管理员权限
             // 这里需要获取当前用户信息，暂时使用默认值
+            // TODO: 从SecurityContext或其他地方获取当前用户信息
             Long currentUserId = SecurityUtils.getUserId(); // 需要实现获取当前用户ID的方法
             String currentUserEmail = "test@wudao-tech.com"; // 需要实现获取当前用户邮箱的方法
 
@@ -381,6 +383,7 @@ public class KnowledgeBaseService extends MPJBaseServiceImpl<KnowledgeBaseMapper
             knowledgeSpaceService.save(rootSpace);
         } catch (Exception e) {
             // 如果创建默认根空间失败，记录日志但不影响知识库创建
+            // TODO: 添加日志记录
             System.err.println("创建知识库默认根空间失败: " + e.getMessage());
         }
     }

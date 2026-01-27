@@ -116,15 +116,15 @@ const changeUser = (val) => {
   wordForm.value.contactUserName = finds.userName;
 };
 const getUserList = async (query) => {
-  if (query) {
-    let params = {
-      pageNum: 1,
-      pageSize: 10,
-      userName: query
-    };
-    const { rows } = await listUserTenant(params);
-    userList.value = rows;
-  }
+  // if (query) {
+  //   let params = {
+  //     pageNum: 1,
+  //     pageSize: 10,
+  //     userName: query
+  //   };
+  //   const { rows } = await listUserTenant(params);
+  //   userList.value = rows;
+  // }
 };
 </script>
 <style scoped lang="scss"></style>

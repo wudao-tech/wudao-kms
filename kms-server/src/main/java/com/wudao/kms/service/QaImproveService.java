@@ -1,6 +1,7 @@
 package com.wudao.kms.service;
 
 import cn.hutool.core.collection.CollUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.yulichang.base.MPJBaseServiceImpl;
@@ -44,7 +45,7 @@ public class QaImproveService extends MPJBaseServiceImpl<QaImproveMapper, QaImpr
     public R<Void> addQa(QaImprove qaImprove) {
         qaImprove.setCreateBy(SecurityUtils.getUserId());
         LLMModel llmModel = llmModelService.queryEmbeddingModelByKnowledgeId(qaImprove.getKnowledgeId());
-        List<float[]> embeddinged = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode()).embedding(llmModel.getModel(),List.of(qaImprove.getQuestion()));
+        List<float[]> embeddinged = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode()).embedding(llmModel.getModel(), List.of(qaImprove.getQuestion()), SecurityUtils.getUserId());
         qaImprove.setQuestionVector(embeddinged.getFirst());
         qaImprove.setGenerateType("manual");
         this.save(qaImprove);
@@ -57,24 +58,31 @@ public class QaImproveService extends MPJBaseServiceImpl<QaImproveMapper, QaImpr
      * @param knowledgeBaseId 知识库
      */
     @Transactional(rollbackFor = Exception.class)
-    public void addBatch(List<QaImprove> qaImproves,Long knowledgeBaseId) {
+    public void addBatch(List<QaImprove> qaImproves,Long knowledgeBaseId, Long userId) {
         if (CollUtil.isEmpty(qaImproves)) {
             return;
         }
         LLMModel llmModel = llmModelService.queryEmbeddingModelByKnowledgeId(knowledgeBaseId);
         List<String> contents = qaImproves.stream().map(QaImprove::getQuestion).toList();
-        List<float[]> embeddinged = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode()).embedding(llmModel.getModel(),contents);
+        List<float[]> embeddinged = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode()).embedding(llmModel.getModel(), contents, userId);
         for (int i = 0; i < qaImproves.size(); i++) {
             qaImproves.get(i).setQuestionVector(embeddinged.get(i));
         }
         this.saveBatch(qaImproves);
     }
 
-    public R<Void> batchPass(List<Long> qaIds){
-        LambdaUpdateWrapper<QaImprove>  updateWrapper = new LambdaUpdateWrapper<>();
-        updateWrapper.set(QaImprove::getReviewStatus,"pass");
+    public R<Void> batchPass(List<Long> qaIds, String status){
+        if (CollUtil.isEmpty(qaIds)) {
+            return R.ok();
+        }
+        LambdaQueryWrapper<QaImprove> updateWrapper = new LambdaQueryWrapper<>();
+//        updateWrapper.set(QaImprove::getReviewStatus,"pass");
         updateWrapper.in(QaImprove::getId,qaIds);
-        this.update(updateWrapper);
+        List<QaImprove> qaImproves = this.list(updateWrapper);
+        qaImproves.forEach(qaImprove -> qaImprove.setReviewStatus(status));
+        this.updateBatchById(qaImproves);
+        List<Long> sourceIds = qaImproves.stream().map(QaImprove::getSourceId).toList();
+        feedbackService.updateStatus(sourceIds, "reject");
         return R.ok();
     }
 
@@ -87,14 +95,15 @@ public class QaImproveService extends MPJBaseServiceImpl<QaImproveMapper, QaImpr
         LLMModel llmModel = llmModelService.queryEmbeddingModelByKnowledgeId(improveAddReq.getKnowledgeId());
         feedbackService.listByIds(improveAddReq.getFeedbackIds()).forEach(feedback -> {
             QaImprove qaImprove = QaImprove.builder().question(feedback.getUserMessage())
-                    .createBy(SecurityUtils.getUserId()).sourceId(feedback.getCreatedBy())
+                    .createBy(SecurityUtils.getUserId()).sourceId(feedback.getId())
+                    .feedbackId(feedback.getId())
                     .answer(feedback.getAgent()).generateType("feedback").reviewStatus("reviewing")
                     .knowledgeId(improveAddReq.getKnowledgeId()).knowledgeSpaceId(improveAddReq.getKnowledgeSpaceId()).createTime(LocalDateTime.now()).build();
             qaImproves.add(qaImprove);
         });
         // 批量处理向量化（由 Strategy 内部处理分段）
         List<float[]> embeddings = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode())
-                .embedding(llmModel.getModel(), qaImproves.stream().map(QaImprove::getQuestion).toList());
+                .embedding(llmModel.getModel(), qaImproves.stream().map(QaImprove::getQuestion).toList(), SecurityUtils.getUserId());
         for (int i = 0; i < qaImproves.size(); i++) {
             qaImproves.get(i).setQuestionVector(embeddings.get(i));
         }
@@ -115,7 +124,7 @@ public class QaImproveService extends MPJBaseServiceImpl<QaImproveMapper, QaImpr
 
     public R<Void> updateQa(QaImprove qaImprove) {
         LLMModel llmModel = llmModelService.queryEmbeddingModelByKnowledgeId(qaImprove.getKnowledgeId());
-        List<float[]> embedding = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode()).embedding(llmModel.getModel(),List.of(qaImprove.getQuestion()));
+        List<float[]> embedding = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode()).embedding(llmModel.getModel(), List.of(qaImprove.getQuestion()), SecurityUtils.getUserId());
         qaImprove.setQuestionVector(embedding.getFirst());
         this.updateById(qaImprove);
         return R.ok();
@@ -197,7 +206,7 @@ public class QaImproveService extends MPJBaseServiceImpl<QaImproveMapper, QaImpr
         LLMModel llmModel = llmModelService.queryEmbeddingModelByKnowledgeId(knowledgeId);
         //  查询知识库的embedding模型进行向量（由 Strategy 内部处理分段）
         List<float[]> embeddings = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode())
-                .embedding(llmModel.getModel(), qaImproves.stream().map(QaImprove::getQuestion).toList());
+                .embedding(llmModel.getModel(), qaImproves.stream().map(QaImprove::getQuestion).toList(), SecurityUtils.getUserId());
         for (int i = 0; i < qaImproves.size(); i++) {
             qaImproves.get(i).setQuestionVector(embeddings.get(i));
         }

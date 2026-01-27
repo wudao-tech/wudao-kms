@@ -111,7 +111,7 @@ import { listTenant, getTenant, delTenant, addTenant, updateTenant, changeTenant
 import { selectTenantPackage, addTenantPackage } from '@/api/system/tenantPackage';
 import { treeselect as menuTreeselect, tenantPackageMenuTreeselect } from '@/api/system/menu';
 import { TenantForm, TenantQuery, TenantVO } from '@/api/system/tenant/types';
-import { listUser } from '@/api/system/user';
+import { listUserByDeptId } from '@/api/system/user';
 import { TenantPkgVO } from '@/api/system/tenantPackage/types';
 import { Search } from '@element-plus/icons-vue';
 import { MenuTreeOption } from '@/api/system/menu/types';
@@ -400,8 +400,8 @@ const getUserList = async (query) => {
       pageSize: 10,
       userName: query
     };
-    const { rows } = await listUser(params);
-    userList.value = rows;
+    const { data } = await listUserByDeptId(params);
+    userList.value = data;
   }
 };
 onMounted(() => {

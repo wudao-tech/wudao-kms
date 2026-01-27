@@ -43,6 +43,7 @@
           <el-select v-model="queryParams.adoptionStatus" placeholder="处理状态" style="width: 100px;" @change="getRecordsList" clearable>
             <el-option label="已添加" value="adopted" />
             <el-option label="未处理" value="unadopted" />
+            <el-option label="未采纳" value="reject" />
           </el-select>
         </div>
         
@@ -59,7 +60,7 @@
               <el-icon><Search /></el-icon>
             </template>
           </el-input>
-          <el-button type="primary" style="margin-left: 0px;" :disabled="selection.length === 0" @click="addToQaVisible = true">添加到问答库</el-button>
+          <el-button type="primary" style="margin-left: 0px;" :disabled="selection.length === 0 || selection.some(item => item.adoptionStatus !== 'unadopted')" @click="handleAddToQa">添加到问答库</el-button>
           <el-button plain @click="handleDelete(null)" :disabled="selection.length === 0">删除</el-button>
           <el-button type="primary" plain @click="handleExport">导出</el-button>
         </div>
@@ -67,7 +68,7 @@
       </div>
       <!-- 数据表格 -->
       <div class="table-container">
-        <el-table v-loading="loading" :data="tableData" style="width: 100%" border row-key="id" @selection-change="handleSelectionChange">
+        <el-table ref="tableRef" v-loading="loading" :data="tableData" style="width: 100%" border row-key="id" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="55" />
           <el-table-column type="index" label="序号" width="60" />
           <el-table-column prop="userMessage" label="问题" min-width="200" show-overflow-tooltip />
@@ -89,7 +90,9 @@
           </el-table-column>
           <el-table-column prop="adoptionStatus" label="处理状态" width="120" >
             <template #default="{row}">
-              <span>{{ row.adoptionStatus === 'adopted' ? '已添加' : '未处理' }}</span>
+              <span v-if="row.adoptionStatus === 'adopted'">已添加</span>
+              <span v-else-if="row.adoptionStatus === 'reject'">未采纳</span>
+              <span v-else>未处理</span>
             </template>
           </el-table-column>
           <el-table-column prop="createTime" label="提问时间" width="180" />
@@ -105,7 +108,7 @@
                 <el-button link @click="handleDelete(row)" icon="Delete"></el-button>
               </el-tooltip>
               <el-tooltip content="添加到问答库" placement="top">
-                <el-button link @click="add(row)" v-if="activeTab === 'records' || (activeTab === 'optimization' && row.optimizationFlag === true)">
+                <el-button link @click="add(row)" v-if="(activeTab === 'records' || (activeTab === 'optimization' && row.optimizationFlag === true)) && row.adoptionStatus === 'unadopted'">
                    <svg-icon icon-class="anwer_plus" />
                 </el-button>
               </el-tooltip>
@@ -179,11 +182,11 @@
 </template>
 
 <script setup>
-import { ref, getCurrentInstance } from 'vue'
+import { ref, getCurrentInstance, nextTick } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getQaTable, getQaRecord, addToQa,  editQaRecord, deleteQaImprove, batchAddToQa, deleteRecordQa } from '@/api/qa'
-import { listUser } from '@/api/system/user'
+import { listUserByDeptId } from '@/api/system/user'
 const { proxy } = getCurrentInstance()
 import { getPublishApp, knowledgeBaseList, knowledgeSpaceList as knowledgeSpaceListApi } from '@/api/base'
 import { getAssistantList, getAssistantDetail } from '@/api/knowledgeExpert'
@@ -218,6 +221,7 @@ const form = ref({})
 const dialogVisible = ref(false)
 const selection = ref([])
 const loading = ref(false)
+const tableRef = ref(null)
 // 表格数据
 const tableData = ref([])
 const createdByList = ref([])
@@ -272,6 +276,25 @@ const addToOptimization = () => {
 const handleSelectionChange = (val) => {
   selection.value = val
   feedbackIds.value = val.map(item => item.id)
+}
+
+// 处理批量添加到问答库
+const handleAddToQa = () => {
+  // 如果选择了多个记录，检查它们是否来自同一个知识专家
+  if (selection.value.length > 1) {
+    const agentUuids = selection.value.map(item => item.agentUuid).filter(Boolean)
+    // 检查是否有不同的知识专家
+    const uniqueAgentUuids = [...new Set(agentUuids)]
+    
+    if (uniqueAgentUuids.length > 1) {
+      // 如果来自不同的知识专家，提示并阻止打开弹窗
+      ElMessage.warning('多个知识专家问答优化时请分开添加')
+      return
+    }
+  }
+  
+  // 检查通过，打开弹窗
+  addToQaVisible.value = true
 }
 
 const add = async (row) => {
@@ -496,7 +519,7 @@ const getBaseList = () => {
 onMounted(() => {
 //   getQaTableList()
   getRecordsList()
-  listUser({pageNum: 1, pageSize: 1000}).then(res => {
+  listUserByDeptId().then(res => {
     createdByList.value = res.data
   })
   getKnowledgeList()

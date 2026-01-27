@@ -7,7 +7,7 @@
     <parent>
         <groupId>com.wudao-tech</groupId>
         <artifactId>parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.2</version>
         <relativePath/> <!-- 或者干脆不写这一行 -->
     </parent>
 
@@ -18,7 +18,8 @@
         <maven.deploy.skip>true</maven.deploy.skip>
         <maven.source.skip>true</maven.source.skip>
         <maven.install.skip>true</maven.install.skip>
-        <spring-ai.version>1.0.0</spring-ai.version>
+        <spring-ai.version>1.1.2</spring-ai.version>
+        <spring-ai-alibaba.version>1.1.0.0-RC2</spring-ai-alibaba.version>
     </properties>
 
     <dependencies>
@@ -166,7 +167,7 @@
         <dependency>
             <groupId>com.alibaba.cloud.ai</groupId>
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
-            <version>1.0.0.3</version>
+            <version>${spring-ai-alibaba.version}</version>
         </dependency>
 
         <dependency>
@@ -191,15 +192,9 @@
         </dependency>
 
         <dependency>
-            <groupId>org.springaicommunity</groupId>
-            <artifactId>moonshot-core</artifactId>
-            <version>1.1.0-SNAPSHOT</version>
-        </dependency>
-
-        <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-zhipuai</artifactId>
-            <version>1.0.3</version>
+            <version>${spring-ai.version}</version>
         </dependency>
 
         <dependency>
@@ -221,9 +216,21 @@
         </dependency>
 
         <dependency>
+            <groupId>com.aliyun</groupId>
+            <artifactId>alibabacloud-pai_dlc20201203</artifactId>
+            <version>1.2.26</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-ollama</artifactId>
-            <version>1.0.3</version>
+            <version>${spring-ai.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.ai</groupId>
+                    <artifactId>spring-ai-client-autoconfigure</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
     </dependencies>
 

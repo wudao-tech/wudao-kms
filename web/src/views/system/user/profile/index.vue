@@ -76,7 +76,6 @@ import ThirdParty from './thirdParty.vue';
 import OnlineDevice from './onlineDevice.vue';
 import { getAuthList } from '@/api/system/social/auth';
 import { getUserProfile, updateUserProfile } from '@/api/system/user';
-import { getOnline } from '@/api/monitor/online';
 import { UserVO } from '@/api/system/user/types';
 
 const activeTab = ref('userinfo');
@@ -110,8 +109,8 @@ const getAuths = async () => {
   state.value.auths = res.data;
 };
 const getOnlines = async () => {
-  const res = await getOnline();
-  state.value.devices = res.data;
+  // const res = await getOnline();
+  // state.value.devices = res.data;
 };
 
 onMounted(() => {

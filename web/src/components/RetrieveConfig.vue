@@ -130,9 +130,9 @@ const props = defineProps({
             searchType: 'fulltext',
             maxSegmentCount: 10,
             rerankModel: 'qwen3-rerank',
-            ragScore: 0.3,
+            ragScore: 0.1,
             ragTopK: 10,
-            rerankScore: 0.5,
+            rerankScore: 0.1,
             rerankTopK: 5
         })
     }
@@ -152,9 +152,9 @@ const form = ref({
     searchType: 'fulltext',
     maxSegmentCount: 10,
     rerankModel: 'qwen3-rerank',
-    ragScore: 0.3,
+    ragScore: 0.1,
     ragTopK: 10,
-    rerankScore: 0.5,
+    rerankScore: 0.1,
     rerankTopK: 10
 })
 

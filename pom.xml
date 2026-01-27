@@ -9,7 +9,7 @@
     <parent>
         <groupId>com.wudao-tech</groupId>
         <artifactId>parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.2</version>
         <relativePath/>
     </parent>
 

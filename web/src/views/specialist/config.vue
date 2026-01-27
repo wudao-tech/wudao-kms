@@ -589,7 +589,7 @@ const formData = ref({
     webSearch: false, // 联网搜索
 
     isRerank: true, // 是否开启重排
-    rerankScore: 0.5, // 重排分
+    rerankScore: 0.1, // 重排分
     rerankTopK: 5, // 重排top k
     rerankModel: 'qwen3-rerank', // 重排模型
 
@@ -600,7 +600,7 @@ const formData = ref({
     knowledgeList: null, // 知识库
     knowledgeSpaceList: [], // 知识空间
     ragTopK: 10, //  top k
-    ragScore: 0.3, // 检索分
+    ragScore: 0.1, // 检索分
     knowledgeSearchType: 'fulltext',
 
     guideWord: '你好，我是小物智能助手，有什么可以帮您？', // 开场文案

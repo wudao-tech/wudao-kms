@@ -1,5 +1,6 @@
 package com.wudao.kms.controller;
 
+import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson.JSON;
 import com.wudao.common.model.vo.R;
 import com.wudao.common.utils.Threads;
@@ -64,11 +65,15 @@ public class KnowledgeFileSegmentController {
     /**
      * 处理文档分段
      */
-    @GetMapping(value = "/process_segment/{knowledgeBaseId}/{spaceId}/{sseUser}", produces = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "处理文档分段", description = "根据临时文件列表和分段配置处理文档分段，通过SSE流式返回处理进度")
+    @GetMapping(value = "/process_segment/{knowledgeBaseId}/{spaceId}/{sseUser}/{fileMd5}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "处理文档分段", description = "根据临时文件列表和分段配置处理文档分段，通过SSE流式返回处理进度。传入fileMd5时只处理单个文件")
     public R<Void> processDocumentSegment(@PathVariable Long knowledgeBaseId,
                                           @PathVariable Long spaceId,
-                                          @PathVariable String sseUser) {
+                                          @PathVariable String sseUser,
+                                          @PathVariable String fileMd5) {
+        if (StrUtil.isEmpty(fileMd5)) {
+            return R.fail("请输入文件md5");
+        }
         Long userId = SecurityUtils.getUserId();
         DocumentSegmentProgressVO.FileProcessInfo fileInfo = new DocumentSegmentProgressVO.FileProcessInfo();
         Threads.newThread(() -> {
@@ -78,10 +83,8 @@ public class KnowledgeFileSegmentController {
                         knowledgeTempDTO.getKnowledgeFileUploadTempDTOList() != null ?
                                 knowledgeTempDTO.getKnowledgeFileUploadTempDTOList().size() : 0);
                 knowledgeTempDTO.setUserId(userId);
-                // 异步处理分段
-                knowledgeFileService.processDocumentSegmentationWithProgress(knowledgeTempDTO);
-
-
+                // 异步处理分段（如果传入fileMd5则只处理单个文件）
+                knowledgeFileService.processDocumentSegmentationWithProgress(knowledgeTempDTO, fileMd5);
                 fileInfo.setStatus("completed");
                 fileInfo.setSegmentStatus("分段完成");
                 fileInfo.setFileProgress(100);

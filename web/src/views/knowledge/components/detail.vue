@@ -88,9 +88,16 @@
             <el-option value="md" key="md" label="md"></el-option>
             <el-option value="wav" key="wav" label="wav"></el-option>
           </el-select>
+          <el-select v-model="query.approveStatus" placeholder="请选择状态" style="width: 150px;" clearable>
+              <el-option label="已采纳" value="agree" />
+              <el-option label="审核中" value="checking" />
+              <el-option label="未采纳" value="reject" />
+          </el-select>
         </div>
         <div class="header-right">
-          <el-button @click="handleSearch" type="primary">搜索</el-button>
+          <el-button  @click="handleBatchPass('agree')" icon="CircleCheck" v-if="permissionType === 1" :disabled="selectedRows.length === 0 ">采纳</el-button>
+          <el-button  @click="handleBatchPass('reject')" icon="CircleClose"  v-if="permissionType === 1" :disabled="selectedRows.length === 0 ">拒绝</el-button>
+          <el-button @click="handleSearch" style="margin-right: 12px;" type="primary">搜索</el-button>
           <el-dropdown>
             <el-button>录入知识</el-button>
             <template #dropdown>
@@ -108,7 +115,9 @@
           :data="tableData" 
           stripe 
           border
+           @selection-change="handleSelectionChange"
           style="width: 100%; margin-bottom: 10px;">
+          <el-table-column type="selection" width="55" :selectable="checkSelectable" />
           <el-table-column prop="fileName" label="名称" show-overflow-tooltip />       
           <el-table-column prop="processingStatus" label="处理状态" />
           <el-table-column prop="createType" label="提交方式" >
@@ -144,19 +153,34 @@
               <span>{{ scope.row.pageCount }}段落 / {{ scope.row.wordCount }}字符</span>
             </template>
           </el-table-column>
-          
+          <el-table-column prop="updatedAt" label="审批状态" >
+            <template #default="{row}">
+              <span v-if="row.approveStatus === 'agree'">已采纳</span>
+              <span v-else-if="row.approveStatus === 'reject'">未采纳</span>
+              <span v-else>审核中</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="updatedAt" label="最近更新时间" />
           
-          <el-table-column label="操作" width="120">
+          <el-table-column label="操作" width="170">
             <template #default="scope">
               <el-tooltip content="查看" placement="top">
                 <el-button link size="small" icon="Tickets" @click="handleView(scope.row)" />
+              </el-tooltip>
+              <el-tooltip content="采纳" placement="top">
+                <el-button link v-if="scope.row.approveStatus === 'checking' && permissionType === 1" size="small" icon="CircleCheck" @click="handleAccept(scope.row, 'agree')" />
+              </el-tooltip>
+              <el-tooltip content="拒绝" placement="top">
+                <el-button link v-if="scope.row.approveStatus === 'checking' && permissionType === 1" size="small" icon="CircleClose" @click="handleAccept(scope.row, 'reject')" />
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
                 <el-button link size="small" icon="Delete" :disabled="permissionType === 3" @click="handleDeleteFile(scope.row)" />
               </el-tooltip>
               <el-tooltip content="分段设置" placement="top">
                 <el-button link size="small" icon="Operation" :disabled="permissionType === 3" @click="handleSegment(scope.row)" />
+              </el-tooltip>
+              <el-tooltip content="分享" placement="top">
+                <el-button link size="small" icon="Share" v-if="scope.row.approveStatus === 'agree'" @click="handleShare(scope.row)"></el-button>
               </el-tooltip>
             </template>
           </el-table-column>
@@ -169,7 +193,7 @@
         />
       </div>
       <QaPair v-else-if="activeTab === 1 && query.spaceId" :permissionType="permissionType" :spaceId="query.spaceId" />
-      <HitTesting v-else-if="activeTab === 2 && query.spaceId" :knowFileList="tableData" :knowledgeBaseIds="query.spaceId" />
+      <HitTesting v-else-if="activeTab === 2 && query.spaceId" :knowFileList="tableData" :knowledgeBaseIds="query.spaceId" @goToKnowledgeSpace="handleGoToKnowledgeSpace" />
       <Thesaurus v-else-if="activeTab === 3 && query.spaceId" :permissionType="permissionType" :spaceId="query.spaceId" />
     </div>
     </div>
@@ -228,7 +252,9 @@ import {
     deleteKnowledgeSpace,
     knowledgeSpaceFileList,
     deleteFile,
-    createTempFile
+    createTempFile,
+    updateFileContent,
+    batchAcceptReject
 } from '@/api/base'
 
 const props = defineProps({
@@ -249,7 +275,7 @@ const props = defineProps({
 const tabs = computed(() => {
   return ['知识列表', '问答对', '命中测试', '词库设置']
 })
-
+const selectedRows = ref([])
 const activeTab = ref(0)
 const router = useRouter()
 const route = useRoute()
@@ -331,6 +357,22 @@ const handleTabChange = (index) => {
   activeTab.value = index
 }
 
+const handleGoToKnowledgeSpace = (data) => {
+  // 切换tab
+  activeTab.value = data.tab
+}
+
+const handleAccept = (data, status) => {
+  let params = {
+    id: data.id,
+    approveStatus: status,
+  }
+  updateFileContent(params).then(res => {
+    ElMessage.success('操作成功')
+    getFileList()
+  })
+}
+
 const handleDeleteFile = (data) => {
   ElMessageBox.confirm(`确定删除${data.fileName}文件吗？`, '提示', {
     confirmButtonText: '确定',
@@ -400,6 +442,66 @@ const handleView = (data) => {
       type: 3
     }
   })
+}
+
+// 分享功能
+const handleShare = (data) => {
+  const url = import.meta.env.VITE_APP_BASE_API
+  
+  // 构建文件链接
+  if (!data.filePath) {
+    ElMessage.warning('文件链接未加载，请稍后再试')
+    return
+  }
+  
+  // 构建完整的分享 URL
+  let shareUrl = url + data.filePath.replace('uploadPath/', 'profile/')
+  
+  // 如果 shareUrl 不是完整的 URL（不以 http:// 或 https:// 开头），则使用当前域名
+  if (!shareUrl.startsWith('http://') && !shareUrl.startsWith('https://')) {
+    shareUrl = window.location.origin + shareUrl
+  }
+  
+  console.log('shareUrl', shareUrl)
+  
+  // 复制到剪贴板
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      ElMessage.success('文件链接已复制到剪贴板')
+    }).catch(() => {
+      // 降级方案：使用传统方法复制
+      copyToClipboard(shareUrl)
+    })
+  } else {
+    // 降级方案：使用传统方法复制
+    copyToClipboard(shareUrl)
+  }
+}
+
+// 传统方法复制到剪贴板（降级方案）
+const copyToClipboard = (text) => {
+  const textArea = document.createElement('textarea')
+  textArea.value = text
+  textArea.style.position = 'fixed'
+  textArea.style.left = '-999999px'
+  textArea.style.top = '-999999px'
+  document.body.appendChild(textArea)
+  textArea.focus()
+  textArea.select()
+  
+  try {
+    const successful = document.execCommand('copy')
+    if (successful) {
+      ElMessage.success('文件链接已复制到剪贴板')
+    } else {
+      ElMessage.error('复制失败，请重试')
+    }
+  } catch (err) {
+    console.error('复制失败:', err)
+    ElMessage.error('复制失败，请重试')
+  } finally {
+    document.body.removeChild(textArea)
+  }
 }
 
 const goBack = () => {
@@ -472,6 +574,27 @@ const getTreeData = () => {
     getFileList()
     treeLoading.value = false
   })
+}
+
+const handleBatchPass = (status) => {
+  console.log('handleBatchPass')
+  batchAcceptReject({
+    fileId: selectedRows.value.map(item => item.id),
+    status: status
+  }).then(res => {
+    ElMessage.success('操作成功')
+    selectedRows.value = []
+    getFileList()
+  })
+}
+
+// 判断行是否可选（只有审批状态为 checking 的才可选）
+const checkSelectable = (row) => {
+    return row.approveStatus === 'checking'
+}
+
+const handleSelectionChange = (selection) => {
+    selectedRows.value = selection
 }
 
 const handleSegment = (data) => {
@@ -712,16 +835,12 @@ onBeforeUnmount(() => {
       gap: 12px;
       
       .search-input {
-        width: 280px;
+        width: 200px;
       }
       
       .filter-select {
         width: 120px;
       }
-    }
-    .header-right {
-      display: flex;
-      gap: 12px;
     }
   .table-container {
     flex: 1;

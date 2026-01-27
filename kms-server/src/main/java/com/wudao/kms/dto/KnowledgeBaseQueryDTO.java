@@ -14,4 +14,7 @@ public class KnowledgeBaseQueryDTO extends KnowledgeBase {
 
     @Schema(description = "用户角色，用于权限过滤")
     private String userRole;
+
+    @Schema(description = "我创建的")
+    private Boolean onlyMe;
 }

@@ -30,4 +30,6 @@ public class KnowledgeFilePageDTO {
 
     @Schema(description = "状态")
     private Integer status;
+
+    private String approveStatus;
 }

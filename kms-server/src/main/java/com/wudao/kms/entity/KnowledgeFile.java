@@ -123,4 +123,7 @@ public class KnowledgeFile extends BaseEntity implements Serializable {
     @Schema(description = "文件处理进度（JSON格式）")
     @TableField(typeHandler = JacksonTypeHandler.class)
     private FileProcessProgressDTO processProgress;
+
+    @Schema(description = "批准状态")
+    private String approveStatus;
 } 

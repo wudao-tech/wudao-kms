@@ -2,6 +2,7 @@ package com.wudao.kms.llm.chat.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
+import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -12,10 +13,11 @@ import com.wudao.kms.dto.AgentChatReq;
 import com.wudao.kms.dto.KnowledgeSearchResult;
 import com.wudao.kms.dto.RerankResp;
 import com.wudao.kms.llm.chat.ChatModelStrategy;
+import com.wudao.kms.llm.chat.advisor.QuotaCheckAdvisor;
 import com.wudao.kms.llm.llmmode.domain.LLMModel;
 import com.wudao.kms.llm.message.domain.AgentMessage;
 import com.wudao.kms.llm.message.mapper.AgentMessageMapper;
-import com.wudao.kms.service.VectorizationService;
+import com.wudao.kms.llm.provider.mapper.ModelProviderMapper;
 import com.wudao.kms.mapper.KnowledgeFileSegmentMapper;
 import com.wudao.kms.entity.KnowledgeFileSegment;
 import com.wudao.kms.entity.KnowledgeFile;
@@ -33,9 +35,6 @@ import org.springframework.ai.deepseek.DeepSeekChatOptions;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.deepseek.api.DeepSeekApi;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -52,21 +51,24 @@ public class DeepSeekStrategy implements ChatModelStrategy {
 
     @Resource
     private AgentMessageMapper agentMessageMapper;
-    @Autowired
-    @Lazy
-    private VectorizationService vectorizationService;
     @Resource
     private KnowledgeFileSegmentMapper knowledgeFileSegmentMapper;
 
-    @Value("${env.api-key.deepseek:#{null}}")
-    private String deepseekApiKey;
+    @Resource
+    private ModelProviderMapper modelProviderMapper;
+
+    @Resource
+    private QuotaCheckAdvisor quotaCheckAdvisor;
+
+    private static final String PROVIDER_CODE = "deepseek";
 
     /**
      * 在使用时直接创建ChatClient
      */
     private ChatClient createChatClient() {
+        String apiKey = modelProviderMapper.getByProviderCode(PROVIDER_CODE).getApiKey();
         DeepSeekApi deepSeekApi = DeepSeekApi.builder()
-                .apiKey(deepseekApiKey)
+                .apiKey(apiKey)
                 .build();
         DeepSeekChatModel customChatModel = DeepSeekChatModel.builder()
                 .deepSeekApi(deepSeekApi)
@@ -92,7 +94,7 @@ public class DeepSeekStrategy implements ChatModelStrategy {
                     - 如果有合适的图片作为回答，则必须输出图片。输出图片时，仅需输出图片的 url，不要输出图片描述，例如：![](url)。
                     - 使用与问题相同的语言回答。
                 """;
-        var searchOptions = DashScopeApi.SearchOptions.builder()
+        var searchOptions = DashScopeApiSpec.SearchOptions.builder()
                 .forcedSearch(chatReq.getWebSearch())
                 .enableSource(chatReq.getWebSearch())
                 .searchStrategy("pro")
@@ -122,12 +124,19 @@ public class DeepSeekStrategy implements ChatModelStrategy {
             memoryMessages.add(new AssistantMessage(node.getAgent()));
         }
 
+        // 添加 userId 到 toolContext 用于 token 记录
+        Map<String, Object> toolContext = toolParam != null ? new HashMap<>(toolParam) : new HashMap<>();
+        toolContext.put(QuotaCheckAdvisor.USER_ID_KEY, chatReq.getUserId());
+        toolContext.put(QuotaCheckAdvisor.OPERATION_TYPE_KEY, "CHAT");
+
         // LLM响应流
         Flux<ServerSentEvent<String>> referenceFlux = Flux.empty();
         Flux<ServerSentEvent<String>> llmFlux = createChatClient().prompt()
                 .options(chatOptions)
                 .system(assistant.getPrompt())
+                .toolContext(toolContext)
                 .messages(memoryMessages)
+                .advisors(quotaCheckAdvisor)
                 .toolCallbacks(toolCallbacks)
                 .user(userPrompt)
                 .stream().chatResponse().map(content -> {
@@ -228,7 +237,7 @@ public class DeepSeekStrategy implements ChatModelStrategy {
     }
 
     @Override
-    public String vl(String model, String prompt, List<Media> mediaList) {
+    public String vl(String model, String prompt, List<Media> mediaList, Long userId) {
         return "";
     }
 
@@ -238,7 +247,7 @@ public class DeepSeekStrategy implements ChatModelStrategy {
     }
 
     @Override
-    public List<float[]> embedding(String model, List<String> contents) {
+    public List<float[]> embedding(String model, List<String> contents, Long userId) {
         return new ArrayList<>();
     }
 
@@ -291,7 +300,7 @@ public class DeepSeekStrategy implements ChatModelStrategy {
     }
 
     @Override
-    public List<RerankResp> rerank(String model, String question, List<String> answer) {
+    public List<RerankResp> rerank(String model, String question, List<String> answer, Long userId) {
         return List.of();
     }
 

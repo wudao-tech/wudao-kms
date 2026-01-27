@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.lang.id.NanoId;
 import cn.hutool.core.util.IdUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
@@ -17,12 +18,14 @@ import com.github.yulichang.base.MPJBaseServiceImpl;
 import com.github.yulichang.wrapper.MPJLambdaWrapper;
 import com.wudao.common.exception.ServiceException;
 import com.wudao.common.utils.DateFormats;
+import com.wudao.common.utils.StringUtils;
 import com.wudao.common.utils.Threads;
 import com.wudao.framework.redis.RedisCache;
 import com.wudao.kms.common.DocumentToMarkdownTool;
 import com.wudao.kms.dto.KnowledgeFilePageDTO;
 import com.wudao.kms.dto.knowledgefile.*;
 import com.wudao.kms.entity.*;
+import com.wudao.kms.entity.req.KnowledgeFileApproveReq;
 import com.wudao.kms.llm.chat.ChatModelStrategy;
 import com.wudao.kms.llm.chat.ChatModelStrategyFactory;
 import com.wudao.kms.llm.llmmode.domain.LLMModel;
@@ -35,13 +38,6 @@ import com.wudao.kms.vo.KnowledgeFileVO;
 import com.wudao.oss.service.OssService;
 import com.wudao.security.utils.SecurityUtils;
 import com.xkcoding.http.util.StringUtil;
-import com.github.dockerjava.api.DockerClient;
-import com.github.dockerjava.api.command.CreateContainerResponse;
-import com.github.dockerjava.api.command.WaitContainerResultCallback;
-import com.github.dockerjava.api.model.Bind;
-import com.github.dockerjava.api.model.DeviceRequest;
-import com.github.dockerjava.api.model.HostConfig;
-import com.github.dockerjava.api.model.Volume;
 import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,14 +60,12 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -84,6 +78,7 @@ import java.util.stream.Collectors;
 public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper, KnowledgeFile> {
 
     private final RedisCache redisCache;
+    private final QwenAiService qwenAiService;
     private final FileContentExtractorService fileContentExtractorService;
     @Lazy
     @Resource
@@ -91,10 +86,6 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
 
     @Value("${basic.profile}")
     private String basicProfile;
-    @Value("${env.mineru-image}")
-    private String minerUImage;
-    @Value("${env.docker-bind-path}")
-    private String dockerBindPath;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final CoverGenerationService coverGenerationService;
     private final OssService ossService;
@@ -106,7 +97,11 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
     private final LLMModelService llmModelService;
     private final QaImproveService qaImproveService;
     private final KnowledgeFileProgressService knowledgeFileProgressService;
-    private final DockerClient dockerClient;
+    @Value("${ocr}")
+    private String ocr;
+
+    private final List<String> unChangeSuffix = List.of("pdf", "doc", "docx", "png", "jpeg", "jpg", "ppt", "pptx");
+
     /**
      * 按照对象参数方式查询文件列表
      */
@@ -123,6 +118,7 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
                 // 查询条件
                 .eq(knowledgeFilePageDTO.getKnowledgeBaseId() != null, KnowledgeFile::getKnowledgeBaseId, knowledgeFilePageDTO.getKnowledgeBaseId())
                 .eq(knowledgeFilePageDTO.getSpaceId() != null, KnowledgeFile::getSpaceId, knowledgeFilePageDTO.getSpaceId())
+                .eq(StrUtil.isNotBlank(knowledgeFilePageDTO.getApproveStatus()), KnowledgeFile::getApproveStatus, knowledgeFilePageDTO.getApproveStatus())
                 .like(knowledgeFilePageDTO.getFileName() != null, KnowledgeFile::getFileName, knowledgeFilePageDTO.getFileName())
                 .eq(knowledgeFilePageDTO.getFileType() != null, KnowledgeFile::getFileType, knowledgeFilePageDTO.getFileType())
                 .eq(knowledgeFilePageDTO.getStatus() != null, KnowledgeFile::getStatus, knowledgeFilePageDTO.getStatus())
@@ -214,13 +210,14 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
      * 更新文件
      */
     public Boolean updateKnowledgeFile(KnowledgeFile knowledgeFile) {
-        // 检查文件名是否重复（排除自己）
-        if (org.springframework.util.StringUtils.hasText(knowledgeFile.getFileName()) &&
-                checkFileNameExists(knowledgeFile.getFileName(), knowledgeFile.getKnowledgeBaseId(), knowledgeFile.getId())) {
-            throw new RuntimeException("该知识库下已存在同名文件");
-        }
-
         return this.updateById(knowledgeFile);
+    }
+
+    public void approveBatch(KnowledgeFileApproveReq req) {
+        LambdaUpdateWrapper<KnowledgeFile> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.set(KnowledgeFile::getApproveStatus, req.getStatus());
+        updateWrapper.in(KnowledgeFile::getId, req.getFileId());
+        this.update(updateWrapper);
     }
 
     /**
@@ -414,17 +411,17 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
                     }
 
                     // 调用AI服务生成摘要和标签
-//                    QwenAiService.AiAnalysisResult aiResult = qwenAiService.analyzeFile(url, fileName);
+                    QwenAiService.AiAnalysisResult aiResult = qwenAiService.analyzeFile(url, fileName);
 
                     // 更新知识库文件临时信息
-//                    String finalParseResult = "解析完成";
-//                    String finalSummary = aiResult.getSummary();
-//                    String finalTags = String.join(",", aiResult.getTags());
+                    String finalParseResult = "解析完成";
+                    String finalSummary = aiResult.getSummary();
+                    String finalTags = String.join(",", aiResult.getTags());
 
                     // 根据md5修改内容
-//                    knowledgeFileUploadTempDTO.setParseResult(finalParseResult);
-//                    knowledgeFileUploadTempDTO.setSummary(finalSummary);
-//                    knowledgeFileUploadTempDTO.setTags(finalTags);
+                    knowledgeFileUploadTempDTO.setParseResult(finalParseResult);
+                    knowledgeFileUploadTempDTO.setSummary(finalSummary);
+                    knowledgeFileUploadTempDTO.setTags(finalTags);
                     knowledgeFileUploadTempDTO.setS3Path(s3Path);
                     return knowledgeFileUploadTempDTO;
 
@@ -529,18 +526,18 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
                     String url = ossService.getHttpUrl(s3Path);
 
                     // 调用AI服务生成摘要和标签
-//                    QwenAiService.AiAnalysisResult aiResult = qwenAiService.analyzeFile(url, actualFileName);
-//
-//                    // 更新知识库文件临时信息
-//                    String finalParseResult = "解析完成";
-//                    String finalSummary = aiResult.getSummary();
-//                    String finalTags = String.join(",", aiResult.getTags());
-//
-//                    // 根据md5修改内容
-//                    knowledgeFileUploadTempDTO.setParseResult(finalParseResult);
-//                    knowledgeFileUploadTempDTO.setSummary(finalSummary);
-//                    knowledgeFileUploadTempDTO.setTags(finalTags);
-//                    knowledgeFileUploadTempDTO.setS3Path(s3Path);
+                    QwenAiService.AiAnalysisResult aiResult = qwenAiService.analyzeFile(url, actualFileName);
+
+                    // 更新知识库文件临时信息
+                    String finalParseResult = "解析完成";
+                    String finalSummary = aiResult.getSummary();
+                    String finalTags = String.join(",", aiResult.getTags());
+
+                    // 根据md5修改内容
+                    knowledgeFileUploadTempDTO.setParseResult(finalParseResult);
+                    knowledgeFileUploadTempDTO.setSummary(finalSummary);
+                    knowledgeFileUploadTempDTO.setTags(finalTags);
+                    knowledgeFileUploadTempDTO.setS3Path(s3Path);
                     return knowledgeFileUploadTempDTO;
 
                 } catch (Exception e) {
@@ -1057,111 +1054,269 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
      * 根据前端传过来的临时文件列表，处理文档分段并通过SSE推送进度
      *
      * @param knowledgeTempDTO 包含临时文件列表和分段配置的DTO
+     * @param fileMd5          指定文件的MD5，为空时处理所有文件
      */
-    public void processDocumentSegmentationWithProgress(KnowledgeTempDTO knowledgeTempDTO) throws Exception {
+    public void processDocumentSegmentationWithProgress(KnowledgeTempDTO knowledgeTempDTO, String fileMd5) throws Exception {
         String key = "knowledge_temp_file:" + knowledgeTempDTO.getKnowledgeBaseId() + ":" + knowledgeTempDTO.getKnowledgeSpaceId() + ":" + knowledgeTempDTO.getUserId();
+
+        // 根据fileMd5过滤要处理的文件列表
+        List<KnowledgeFileUploadTempDTO> filesToProcess = knowledgeTempDTO.getKnowledgeFileUploadTempDTOList().stream()
+                .filter(file -> StringUtil.isEmpty(fileMd5) || fileMd5.equals(file.getFileMd5()))
+                .toList();
+
+        // 使用CompletableFuture并行处理文件
+        List<CompletableFuture<Void>> futures = filesToProcess.stream()
+                .map(file -> CompletableFuture.runAsync(() -> {
+                    try {
+                        processSingleFileSegmentation(file, knowledgeTempDTO);
+                    } catch (Exception e) {
+                        log.error("文件处理失败: {}", file.getFileName(), e);
+                        throw new RuntimeException("文件处理失败: " + file.getFileName(), e);
+                    }
+                }))
+                .toList();
+
+        // 等待所有任务完成
+        try {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        } catch (Exception e) {
+            log.error("批量处理文件分段时发生错误", e);
+            throw e;
+        }
+
+        redisCache.setCacheObject(key, knowledgeTempDTO);
+    }
+
+    /**
+     * 处理单个文件的分段逻辑
+     */
+    private void processSingleFileSegmentation(KnowledgeFileUploadTempDTO file, KnowledgeTempDTO knowledgeTempDTO) throws Exception {
         // 判断没有打开高级设置
         Boolean changeFlag = knowledgeTempDTO.getKnowLedgeSegmentConfig().getExtraChangeFlag();
-        for (KnowledgeFileUploadTempDTO file : knowledgeTempDTO.getKnowledgeFileUploadTempDTOList()) {// 将配置映射到接口参数
-            Integer maxTokens = knowledgeTempDTO.getKnowLedgeSegmentConfig().getCustomSegmentSize();      // 对应 curl 的 max_tokens
-            Integer overlap = knowledgeTempDTO.getKnowLedgeSegmentConfig().getCustomSegmentOverlap();   // 对应 curl 的 overlap
-            String customSeps = knowledgeTempDTO.getKnowLedgeSegmentConfig().getCustomSegmentType();      // 这里作为 custom_separators 传；没有就传空
-            String segmentType = knowledgeTempDTO.getKnowLedgeSegmentConfig().getSegmentType();          // 分段类型：paragraph/contentSize/symbol
-            Integer maxParagraph = knowledgeTempDTO.getKnowLedgeSegmentConfig().getMaxParagraph();       // 最大段落深度
-            if (StringUtil.isEmpty(file.getS3Path())) {
-                String s3Input = String.format("wudao/mineru/%s/input/%s", file.getFileMd5(), file.getFileName());
-                ossService.putObject(file.getLocalSourcePath(), s3Input);
-                file.setS3Path(s3Input);
-            }
-            if (changeFlag) {
-                if (knowledgeTempDTO.getKnowLedgeSegmentConfig().getPdfIncrease() && !audioFlag(file.getFileName())) {
-                    String extraMdPath = basicProfile + "/change_md/" + LocalDateTime.now().format(DateFormats.yyyyMMddHHmmss) + ".md";
-                    if (knowledgeTempDTO.getKnowLedgeSegmentConfig().getPdfIncrease()) {
+        // 将配置映射到接口参数
+        Integer maxTokens = knowledgeTempDTO.getKnowLedgeSegmentConfig().getCustomSegmentSize();      // 对应 curl 的 max_tokens
+        Integer overlap = knowledgeTempDTO.getKnowLedgeSegmentConfig().getCustomSegmentOverlap();   // 对应 curl 的 overlap
+        String customSeps = knowledgeTempDTO.getKnowLedgeSegmentConfig().getCustomSegmentType();      // 这里作为 custom_separators 传；没有就传空
+        String segmentType = knowledgeTempDTO.getKnowLedgeSegmentConfig().getSegmentType();          // 分段类型：paragraph/contentSize/symbol
+        Integer maxParagraph = knowledgeTempDTO.getKnowLedgeSegmentConfig().getMaxParagraph();       // 最大段落深度
+
+        if (StringUtil.isEmpty(file.getS3Path())) {
+            String s3Input = String.format("wudao/mineru/%s/input/%s", file.getFileMd5(), file.getFileName());
+            // 除了pdf和图片以外，所有的内容都需要转换成pdf
+            ossService.putObject(file.getLocalSourcePath(), s3Input);
+            file.setS3Path(s3Input);
+        }
+        if (changeFlag) {
+            if (knowledgeTempDTO.getKnowLedgeSegmentConfig().getPdfIncrease() && !audioFlag(file.getFileName())) {
+                // 使用UUID或MD5避免并发下的文件名冲突
+                String extraMdPath = basicProfile + "/change_md/" + LocalDateTime.now().format(DateFormats.yyyyMMddHHmmss) + "_" + file.getFileMd5() + ".md";
+                if (knowledgeTempDTO.getKnowLedgeSegmentConfig().getPdfIncrease()) {
+
+                    String currentSuffix = FileUtil.getSuffix(file.getLocalSourcePath()).toLowerCase();
+                    if (List.of("txt", "csv", "xlsx").contains(currentSuffix)) {
+                        file.setExtraMd(documentToMarkdownTool.convertToMdFile(file.getLocalSourcePath()));
+                    } else if (ocr.equals("mineru")) {
                         try {
-                            // 使用 Docker 离线版本执行 MinerU 解析
-                            String outputDir = basicProfile + "/mineru_output/" + file.getFileMd5();
-                            String resultMdPath = executeMinerUDocker(file.getLocalSourcePath(), outputDir, file.getFileName());
-
-                            // 处理图片并替换路径（上传到 OSS）
-                            String processedContent = processDockerMinerUResult(resultMdPath, outputDir, file.getFileName());
-
-                            // 保存处理后的 markdown
-                            FileUtil.writeUtf8String(processedContent, extraMdPath);
+                            String httpUrl = ossService.getHttpUrl(file.getS3Path());
+                            CompletableFuture<MinerUTask> completableFuture = minerUService.parseFile(
+                                    httpUrl, knowledgeTempDTO.getUserId());
+                            MinerUTask minerUTask = completableFuture.get();
+                            String resultContent = minerUTask.getResultContent();
+                            FileUtil.writeUtf8String(resultContent, extraMdPath);
                             file.setExtraMd(extraMdPath);
                         } catch (Exception e) {
-                            log.error("Docker MinerU 解析失败", e);
+                            log.error("解析失败", e);
+                            throw e;
                         }
-                    }
-                } else {
-                    if (audioFlag(file.getFileName())) {
-                        // 如果是mp4格式,需要先转换成wav格式
-                        String audioUrl;
-                        String suffix = FileUtil.getSuffix(file.getFileName());
-                        if ("mp4".equalsIgnoreCase(suffix)) {
-                            // 使用ffmpeg将mp4转换成wav
-                            String wavPath = convertMp4ToWav(file.getLocalSourcePath(), file.getFileMd5());
-                            // 上传wav文件到OSS
-                            String wavS3Path = "wudao/kms/audio/" + file.getFileMd5() + ".wav";
-                            ossService.putObject(wavPath, wavS3Path);
-                            audioUrl = ossService.getHttpUrl(wavS3Path);
-                            // 删除临时wav文件
-                            FileUtil.del(wavPath);
-                        } else {
-                            audioUrl = ossService.getHttpUrl(file.getS3Path());
-                        }
-                        // 查询对应的语音模型
-                        KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectById(knowledgeTempDTO.getKnowledgeBaseId());
-                        LLMModel llmModel = llmModelService.queryLLMByModel(knowledgeBase.getAudioModel());
-                        String asr = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode()).asr(audioUrl, knowledgeTempDTO.getUserId(), llmModel.getModel());
-                        String audioTxt = "/uploadPath/uploads/fileMd5/" + LocalDateTime.now().format(DateFormats.yyyyMMddHHmmss)
-                                + "/" + FileUtil.getPrefix(file.getFileName()) + ".txt";
-                        FileUtil.writeUtf8String(asr, audioTxt);
-                        file.setExtraMd(documentToMarkdownTool.convertToMdFile(audioTxt));
                     } else {
-                        file.setExtraMd(documentToMarkdownTool.convertToMdFile(file.getLocalSourcePath()));
+                        CompletableFuture<MinerUTask> future = minerUService.parseFileDlc(file.getFileMd5(), file.getS3Path(), knowledgeTempDTO.getUserId());
+                        MinerUTask minerUTask = future.get();
+                        file.setExtraMd(minerUTask.getLocalResultPath());
                     }
                 }
-
-
-                // 删除原有分段数据
-                LambdaQueryWrapper<KnowledgeFileSegment> deleteWrapper = new LambdaQueryWrapper<>();
-                deleteWrapper.eq(KnowledgeFileSegment::getKnowledgeBaseId, knowledgeTempDTO.getKnowledgeBaseId());
-                deleteWrapper.eq(KnowledgeFileSegment::getKnowledgeSpaceId, knowledgeTempDTO.getKnowledgeSpaceId());
-                deleteWrapper.eq(KnowledgeFileSegment::getFileMd5, file.getFileMd5());
-                deleteWrapper.isNull(KnowledgeFileSegment::getFileId);
-                knowledgeFileSegmentService.remove(deleteWrapper);
-
-                MarkdownSplitService.SplitResponse splitResponse = markdownSplitService.splitMarkdownFromContent(
-                        FileUtil.readUtf8String(file.getExtraMd()), maxTokens, overlap, customSeps, segmentType, maxParagraph);
-
-                String localSegmentPath = buildLocalSegmentPath(knowledgeTempDTO.getKnowledgeBaseId(), knowledgeTempDTO.getUserId(),
-                        file.getFileMd5() + ".json");
-                FileUtil.writeUtf8String(JSONObject.toJSONString(splitResponse), localSegmentPath);
-                // 存储到数据库
-                JSONArray ragResult = JSONArray.parseArray(JSONObject.toJSONString(splitResponse.getChunks()));
-                int wordCount = 0;
-                List<KnowledgeFileSegment> segments = new ArrayList<>();
-                for (int i = 1; i <= ragResult.size(); i++) {
-                    Object item = ragResult.get(i - 1);
-                    if (item instanceof JSONObject jsonObject) {
-                        String content = jsonObject.getString("content");
-                        KnowledgeFileSegment segment = new KnowledgeFileSegment();
-                        segment.setSegmentIndex(i);
-                        segment.setKnowledgeBaseId(knowledgeTempDTO.getKnowledgeBaseId());
-                        segment.setKnowledgeSpaceId(knowledgeTempDTO.getKnowledgeSpaceId());
-                        segment.setFileMd5(file.getFileMd5());
-                        content = cleanTextComprehensive(content);
-                        segment.setSegmentContent(content);
-                        wordCount += content.length();
-                        segments.add(segment);
+            } else {
+                if (audioFlag(file.getFileName())) {
+                    // 如果是mp4格式,需要先转换成wav格式
+                    String audioUrl;
+                    String suffix = FileUtil.getSuffix(file.getFileName());
+                    if ("mp4".equalsIgnoreCase(suffix)) {
+                        // 使用ffmpeg将mp4转换成wav
+                        String wavPath = convertMp4ToWav(file.getLocalSourcePath(), file.getFileMd5());
+                        // 上传wav文件到OSS
+                        String wavS3Path = "wudao/kms/audio/" + file.getFileMd5() + ".wav";
+                        ossService.putObject(wavPath, wavS3Path);
+                        audioUrl = ossService.getHttpUrl(wavS3Path);
+                        // 删除临时wav文件
+                        FileUtil.del(wavPath);
+                    } else {
+                        audioUrl = ossService.getHttpUrl(file.getS3Path());
                     }
+                    // 查询对应的语音模型
+                    KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectById(knowledgeTempDTO.getKnowledgeBaseId());
+                    LLMModel llmModel = llmModelService.queryLLMByModel(knowledgeBase.getAudioModel());
+                    String asr = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode()).asr(audioUrl, knowledgeTempDTO.getUserId(), llmModel.getModel());
+                    String audioTxt = "/uploadPath/uploads/fileMd5/" + LocalDateTime.now().format(DateFormats.yyyyMMddHHmmss)
+                            + "/" + FileUtil.getPrefix(file.getFileName()) + ".txt";
+                    FileUtil.writeUtf8String(asr, audioTxt);
+                    file.setExtraMd(documentToMarkdownTool.convertToMdFile(audioTxt));
+                } else {
+                    file.setExtraMd(documentToMarkdownTool.convertToMdFile(file.getLocalSourcePath()));
                 }
-                knowledgeFileSegmentService.saveBatch(segments);
-                file.setSegmentedDocPath(localSegmentPath);
-                file.setContentCount(wordCount);
-                file.setSegmentCount(segments.size());
             }
-            redisCache.setCacheObject(key, knowledgeTempDTO);
+
+
+            // 删除原有分段数据
+            LambdaQueryWrapper<KnowledgeFileSegment> deleteWrapper = new LambdaQueryWrapper<>();
+            deleteWrapper.eq(KnowledgeFileSegment::getKnowledgeBaseId, knowledgeTempDTO.getKnowledgeBaseId());
+            deleteWrapper.eq(KnowledgeFileSegment::getKnowledgeSpaceId, knowledgeTempDTO.getKnowledgeSpaceId());
+            deleteWrapper.eq(KnowledgeFileSegment::getFileMd5, file.getFileMd5());
+            deleteWrapper.isNull(KnowledgeFileSegment::getFileId);
+            knowledgeFileSegmentService.remove(deleteWrapper);
+
+            MarkdownSplitService.SplitResponse splitResponse = markdownSplitService.splitMarkdownFromContent(
+                    FileUtil.readUtf8String(file.getExtraMd()), maxTokens, overlap, customSeps, segmentType, maxParagraph);
+
+            String localSegmentPath = buildLocalSegmentPath(knowledgeTempDTO.getKnowledgeBaseId(), knowledgeTempDTO.getUserId(),
+                    file.getFileMd5() + ".json");
+            FileUtil.writeUtf8String(JSONObject.toJSONString(splitResponse), localSegmentPath);
+            // 存储到数据库
+            JSONArray ragResult = JSONArray.parseArray(JSONObject.toJSONString(splitResponse.getChunks()));
+            int wordCount = 0;
+            List<KnowledgeFileSegment> segments = new ArrayList<>();
+            for (int i = 1; i <= ragResult.size(); i++) {
+                Object item = ragResult.get(i - 1);
+                if (item instanceof JSONObject jsonObject) {
+                    String content = jsonObject.getString("content");
+                    KnowledgeFileSegment segment = new KnowledgeFileSegment();
+                    segment.setSegmentIndex(i);
+                    segment.setKnowledgeBaseId(knowledgeTempDTO.getKnowledgeBaseId());
+                    segment.setKnowledgeSpaceId(knowledgeTempDTO.getKnowledgeSpaceId());
+                    segment.setFileMd5(file.getFileMd5());
+                    content = cleanTextComprehensive(content);
+                    segment.setSegmentContent(content);
+                    wordCount += content.length();
+                    segments.add(segment);
+                }
+            }
+            knowledgeFileSegmentService.saveBatch(segments);
+            file.setSegmentedDocPath(localSegmentPath);
+            file.setContentCount(wordCount);
+            file.setSegmentCount(segments.size());
+        }
+    }
+
+    private void processSingleFileSegmentation(KnowledgeFile file, KnowledgeTempDTO knowledgeTempDTO) throws Exception {
+        // 判断没有打开高级设置
+        Boolean changeFlag = knowledgeTempDTO.getKnowLedgeSegmentConfig().getExtraChangeFlag();
+        // 将配置映射到接口参数
+        Integer maxTokens = knowledgeTempDTO.getKnowLedgeSegmentConfig().getCustomSegmentSize();      // 对应 curl 的 max_tokens
+        Integer overlap = knowledgeTempDTO.getKnowLedgeSegmentConfig().getCustomSegmentOverlap();   // 对应 curl 的 overlap
+        String customSeps = knowledgeTempDTO.getKnowLedgeSegmentConfig().getCustomSegmentType();      // 这里作为 custom_separators 传；没有就传空
+        String segmentType = knowledgeTempDTO.getKnowLedgeSegmentConfig().getSegmentType();          // 分段类型：paragraph/contentSize/symbol
+        Integer maxParagraph = knowledgeTempDTO.getKnowLedgeSegmentConfig().getMaxParagraph();       // 最大段落深度
+
+        if (StringUtil.isEmpty(file.getS3Path())) {
+            String s3Input = String.format("wudao/mineru/%s/input/%s", file.getFileMd5(), file.getFileName());
+            // 除了pdf和图片以外，所有的内容都需要转换成pdf
+            ossService.putObject(file.getFilePath(), s3Input);
+            file.setS3Path(s3Input);
+        }
+        if (changeFlag) {
+            if (knowledgeTempDTO.getKnowLedgeSegmentConfig().getPdfIncrease() && !audioFlag(file.getFileName())) {
+                // 使用UUID或MD5避免并发下的文件名冲突
+                String extraMdPath = basicProfile + "/change_md/" + LocalDateTime.now().format(DateFormats.yyyyMMddHHmmss) + "_" + file.getFileMd5() + ".md";
+                if (knowledgeTempDTO.getKnowLedgeSegmentConfig().getPdfIncrease()) {
+
+                    String currentSuffix = FileUtil.getSuffix(file.getFilePath()).toLowerCase();
+                    if (List.of("txt", "csv", "xlsx").contains(currentSuffix)) {
+                        file.setExtraMd(documentToMarkdownTool.convertToMdFile(file.getFilePath()));
+                    } else if (ocr.equals("mineru")) {
+                        try {
+                            String httpUrl = ossService.getHttpUrl(file.getS3Path());
+                            CompletableFuture<MinerUTask> completableFuture = minerUService.parseFile(
+                                    httpUrl, knowledgeTempDTO.getUserId());
+                            MinerUTask minerUTask = completableFuture.get();
+                            String resultContent = minerUTask.getResultContent();
+                            FileUtil.writeUtf8String(resultContent, extraMdPath);
+                            file.setExtraMd(extraMdPath);
+                        } catch (Exception e) {
+                            log.error("解析失败", e);
+                            throw e;
+                        }
+                    } else {
+                        CompletableFuture<MinerUTask> future = minerUService.parseFileDlc(file.getFileMd5(), file.getS3Path(), knowledgeTempDTO.getUserId());
+                        MinerUTask minerUTask = future.get();
+                        file.setExtraMd(minerUTask.getLocalResultPath());
+                    }
+                }
+            } else {
+                if (audioFlag(file.getFileName())) {
+                    // 如果是mp4格式,需要先转换成wav格式
+                    String audioUrl;
+                    String suffix = FileUtil.getSuffix(file.getFileName());
+                    if ("mp4".equalsIgnoreCase(suffix)) {
+                        // 使用ffmpeg将mp4转换成wav
+                        String wavPath = convertMp4ToWav(file.getFilePath(), file.getFileMd5());
+                        // 上传wav文件到OSS
+                        String wavS3Path = "wudao/kms/audio/" + file.getFileMd5() + ".wav";
+                        ossService.putObject(wavPath, wavS3Path);
+                        audioUrl = ossService.getHttpUrl(wavS3Path);
+                        // 删除临时wav文件
+                        FileUtil.del(wavPath);
+                    } else {
+                        audioUrl = ossService.getHttpUrl(file.getS3Path());
+                    }
+                    // 查询对应的语音模型
+                    KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectById(knowledgeTempDTO.getKnowledgeBaseId());
+                    LLMModel llmModel = llmModelService.queryLLMByModel(knowledgeBase.getAudioModel());
+                    String asr = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode()).asr(audioUrl, knowledgeTempDTO.getUserId(), llmModel.getModel());
+                    String audioTxt = "/uploadPath/uploads/fileMd5/" + LocalDateTime.now().format(DateFormats.yyyyMMddHHmmss)
+                            + "/" + FileUtil.getPrefix(file.getFileName()) + ".txt";
+                    FileUtil.writeUtf8String(asr, audioTxt);
+                    file.setExtraMd(documentToMarkdownTool.convertToMdFile(audioTxt));
+                } else {
+                    file.setExtraMd(documentToMarkdownTool.convertToMdFile(file.getFilePath()));
+                }
+            }
+
+
+            // 删除原有分段数据
+            LambdaQueryWrapper<KnowledgeFileSegment> deleteWrapper = new LambdaQueryWrapper<>();
+            deleteWrapper.eq(KnowledgeFileSegment::getKnowledgeBaseId, knowledgeTempDTO.getKnowledgeBaseId());
+            deleteWrapper.eq(KnowledgeFileSegment::getKnowledgeSpaceId, knowledgeTempDTO.getKnowledgeSpaceId());
+            deleteWrapper.eq(KnowledgeFileSegment::getFileMd5, file.getFileMd5());
+            deleteWrapper.isNull(KnowledgeFileSegment::getFileId);
+            knowledgeFileSegmentService.remove(deleteWrapper);
+
+            MarkdownSplitService.SplitResponse splitResponse = markdownSplitService.splitMarkdownFromContent(
+                    FileUtil.readUtf8String(file.getExtraMd()), maxTokens, overlap, customSeps, segmentType, maxParagraph);
+
+            String localSegmentPath = buildLocalSegmentPath(knowledgeTempDTO.getKnowledgeBaseId(), knowledgeTempDTO.getUserId(),
+                    file.getFileMd5() + ".json");
+            FileUtil.writeUtf8String(JSONObject.toJSONString(splitResponse), localSegmentPath);
+            // 存储到数据库
+            JSONArray ragResult = JSONArray.parseArray(JSONObject.toJSONString(splitResponse.getChunks()));
+            int wordCount = 0;
+            List<KnowledgeFileSegment> segments = new ArrayList<>();
+            for (int i = 1; i <= ragResult.size(); i++) {
+                Object item = ragResult.get(i - 1);
+                if (item instanceof JSONObject jsonObject) {
+                    String content = jsonObject.getString("content");
+                    KnowledgeFileSegment segment = new KnowledgeFileSegment();
+                    segment.setSegmentIndex(i);
+                    segment.setKnowledgeBaseId(knowledgeTempDTO.getKnowledgeBaseId());
+                    segment.setKnowledgeSpaceId(knowledgeTempDTO.getKnowledgeSpaceId());
+                    segment.setFileMd5(file.getFileMd5());
+                    content = cleanTextComprehensive(content);
+                    segment.setSegmentContent(content);
+                    wordCount += content.length();
+                    segments.add(segment);
+                }
+            }
+            knowledgeFileSegmentService.saveBatch(segments);
+            file.setSegmentedDocPath(localSegmentPath);
+            file.setWordCount(wordCount);
+            file.setPageCount(segments.size());
         }
     }
 
@@ -1220,7 +1375,10 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
         for (KnowledgeFileUploadTempDTO tempFile : knowledgeTempDTO.getKnowledgeFileUploadTempDTOList()) {
             KnowledgeFile knowledgeFile = new KnowledgeFile();
             BeanUtils.copyProperties(tempFile, knowledgeFile);
-            knowledgeFile.setId(tempFile.getFileId());
+            if (tempFile.getFileId() != null) {
+                this.deleteKnowledgeFile(tempFile.getFileId());
+                knowledgeFile.setId(null);
+            }
             knowledgeFile.setSpaceId(knowledgeTempDTO.getKnowledgeSpaceId());
             String filePath = basicProfile + "/knowledgeFile/" + knowledgeTempDTO.getKnowledgeBaseId()
                     + "/" + knowledgeTempDTO.getKnowledgeSpaceId() + "/" + knowledgeFile.getFileMd5() + "." + FileUtil.getSuffix(tempFile.getFileName());
@@ -1249,6 +1407,7 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
             knowledgeFile.setWordCount(tempFile.getContentCount());
             knowledgeFile.setProcessTime(LocalDateTime.now());
             knowledgeFile.setDeleteFlag(false);
+            knowledgeFile.setApproveStatus("checking");
             knowledgeFile.setFileType(FileUtil.getSuffix(tempFile.getFileName()));
             knowledgeFile.setUuid(NanoId.randomNanoId(10));
             knowledgeFile.setFileMd5(cleanTextForDatabase(tempFile.getFileMd5()));
@@ -1301,7 +1460,7 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
                 summary(knowledgeTempDTO.getKnowledgeBaseId(), knowledgeFiles, knowledgeTempDTO.getKnowLedgeSegmentConfig());
 
                 vector(knowledgeFiles, knowledgeTempDTO.getKnowLedgeSegmentConfig(), knowledgeTempDTO.getKnowledgeBaseId(),
-                        knowledgeTempDTO.getKnowledgeSpaceId(), userId);
+                        knowledgeTempDTO.getKnowledgeSpaceId(), userId, cacheObject);
 
 
             } catch (Exception e) {
@@ -1332,40 +1491,55 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
         if (!knowLedgeSegmentConfig.getSummary() && !knowLedgeSegmentConfig.getTags()) {
             return;
         }
-        knowledgeFiles.stream().filter(item -> StringUtil.isNotEmpty(item.getExtraMd())).forEach(item -> {
-            try {
-                ChatModelStrategyFactory modelStrategy = SpringUtil.getBean(ChatModelStrategyFactory.class);
+        List<CompletableFuture<Void>> futures = knowledgeFiles.stream()
+                .filter(item -> StringUtil.isNotEmpty(item.getExtraMd()))
+                .map(item -> CompletableFuture.runAsync(() -> {
+                    try {
+                        ChatModelStrategyFactory modelStrategy = SpringUtil.getBean(ChatModelStrategyFactory.class);
 
-                String systemPrompt = """
-                        你是一个总结专家，帮用户发送过来的文件进行总结和得到三个标签，希望得到是json不是md格式，例子为：
-                        {
-                            "summary":"这边文章是干嘛的",
-                            "tags":["tags1","tags2"]
+                        String systemPrompt = """
+                                你是一个总结专家，帮用户发送过来的文件进行总结和得到三个标签，希望得到是json不是md格式，例子为：
+                                {
+                                    "summary":"这边文章是干嘛的",
+                                    "tags":["tags1","tags2"]
+                                }
+                                """;
+                        LLMModel textModel = llmModelService.queryTextModelByKnowledgeId(knowledgeBaseId);
+                        ChatModelStrategy strategy = modelStrategy.getStrategy(textModel.getProviderCode());
+                        String userPrompt = FileUtil.readUtf8String(item.getExtraMd());
+                        if (userPrompt.length() > 10000) {
+                            userPrompt = userPrompt.substring(0, 10000);
                         }
-                        """;
-                LLMModel textModel = llmModelService.queryTextModelByKnowledgeId(knowledgeBaseId);
-                ChatModelStrategy strategy = modelStrategy.getStrategy(textModel.getProviderCode());
-                String result = strategy.simpleChat(textModel.getModel(), systemPrompt, FileUtil.readUtf8String(item.getExtraMd()), true);
-                result = result.replaceAll("```", "").replaceAll("json", "");
-                JSONObject jsonObject = JSONObject.parseObject(result);
-                String summary = jsonObject.getString("summary");
-                if (knowLedgeSegmentConfig.getSummary()) {
-                    item.setSummary(summary);
-                }
-                List<String> tags = jsonObject.getJSONArray("tags").toList(String.class, JSONReader.Feature.values());
-                if (knowLedgeSegmentConfig.getTags()) {
-                    item.setTags(CollUtil.join(tags, ","));
-                }
-            } catch (Exception e) {
-                log.error("调用总结异常", e);
-            }
-        });
+                        String result = strategy.simpleChat(textModel.getModel(), systemPrompt, userPrompt, true);
+                        result = result.replaceAll("```", "").replaceAll("json", "");
+                        JSONObject jsonObject = JSONObject.parseObject(result);
+                        String summary = jsonObject.getString("summary");
+                        if (knowLedgeSegmentConfig.getSummary()) {
+                            item.setSummary(summary);
+                        }
+                        List<String> tags = jsonObject.getJSONArray("tags").toList(String.class, JSONReader.Feature.values());
+                        if (knowLedgeSegmentConfig.getTags()) {
+                            item.setTags(CollUtil.join(tags, ","));
+                        }
+                    } catch (Exception e) {
+                        log.error("调用总结异常", e);
+                    }
+                }))
+                .toList();
+
+        // 等待所有任务完成
+        try {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        } catch (Exception e) {
+            log.error("批量处理文件总结时发生错误", e);
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void vector(List<KnowledgeFile> knowledgeFiles, KnowLedgeSegmentConfig config, Long knowledgeBaseId, Long knowledgeSpaceId, Long userId) {
+    public void vector(List<KnowledgeFile> knowledgeFiles, KnowLedgeSegmentConfig config, Long knowledgeBaseId, Long knowledgeSpaceId, Long userId, KnowledgeTempDTO knowledgeTempDTO) {
 
-        knowledgeFiles.forEach(item -> {
+        // 获取临时文件信息，用于处理未分段的文件
+        List<CompletableFuture<Void>> futures = knowledgeFiles.stream().map(item -> CompletableFuture.runAsync(() -> {
             try {
                 // 重置所有进度为0
                 knowledgeFileProgressService.resetAllProgress(item.getId());
@@ -1383,6 +1557,31 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
                 List<KnowledgeFileSegment> fileSegments =
                         knowledgeFileSegmentService.list(Wrappers.lambdaQuery(KnowledgeFileSegment.class)
                                 .eq(KnowledgeFileSegment::getFileId, item.getId()).orderByAsc(KnowledgeFileSegment::getSegmentIndex));
+
+                // 如果没有分段记录，先进行分段处理
+                if (fileSegments.isEmpty() && knowledgeTempDTO != null && knowledgeTempDTO.getKnowledgeFileUploadTempDTOList() != null) {
+                    KnowledgeFileUploadTempDTO tempFile = knowledgeTempDTO.getKnowledgeFileUploadTempDTOList().stream()
+                            .filter(f -> item.getFileMd5().equals(f.getFileMd5()))
+                            .findFirst()
+                            .orElse(null);
+                    if (tempFile != null) {
+                        log.info("文件 {} 未分段，开始分段处理", item.getFileName());
+                        processSingleFileSegmentation(item, knowledgeTempDTO);
+                        // 重新查询分段
+                        fileSegments = knowledgeFileSegmentService.list(Wrappers.lambdaQuery(KnowledgeFileSegment.class)
+                                .eq(KnowledgeFileSegment::getKnowledgeBaseId, item.getKnowledgeBaseId())
+                                .eq(KnowledgeFileSegment::getKnowledgeSpaceId, item.getSpaceId())
+                                .eq(KnowledgeFileSegment::getFileMd5, item.getFileMd5())
+                                .orderByAsc(KnowledgeFileSegment::getSegmentIndex));
+                        // 更新file_id
+                        for (KnowledgeFileSegment segment : fileSegments) {
+                            segment.setFileId(item.getId());
+                        }
+                        if (!fileSegments.isEmpty()) {
+                            knowledgeFileSegmentService.updateBatchById(fileSegments);
+                        }
+                    }
+                }
 
                 int totalSegments = fileSegments.size();
 
@@ -1403,8 +1602,8 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
                             List<String> imageUrls = extractImageUrlsFromMarkdown(content.getSegmentContent());
                             List<Media> mediaList = ChangeMediaTool.convertUrlsToMedia(imageUrls);
                             // 这里可以进一步处理imageUrls，比如调用qwen-vl-plus进行图片识别
-                            String vlContent = vlStrategy.vl(vlModel.getModel(), "请直接输出分析图片的内容", mediaList);
-                            content.setVlContent(vlContent);
+                            String vlContent = vlStrategy.vl(vlModel.getModel(), "请直接输出分析图片的内容", mediaList,userId);
+                            content.setVlContent(content.getVlContent() + vlContent);
                         }
 
                         // 无论是否有图片,每处理完一个段落就更新进度
@@ -1426,14 +1625,14 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
                     String qaPrompt = config.getQaExtractPrompt() + """
                             生成的问题和答案请以纯JSON内容比如:[{"q":"问题","a":"答案"}]
                             """;
-                    List<KnowledgeFileSegment> qaSegment = new ArrayList<>();
+                    List<KnowledgeFileSegment> qaSegment = java.util.Collections.synchronizedList(new ArrayList<>());
 
                     // 使用AtomicInteger来在异步任务中追踪进度
                     final int totalQaSegments = fileSegments.size();
                     final java.util.concurrent.atomic.AtomicInteger qaProcessedCount = new java.util.concurrent.atomic.AtomicInteger(0);
 
                     // 异步处理每个分段的QA提取
-                    List<CompletableFuture<Void>> futures = fileSegments.stream()
+                    List<CompletableFuture<Void>> qaFutures = fileSegments.stream()
                             .map(qa -> CompletableFuture.runAsync(() -> {
                                 try {
                                     String segmentContent = textStrategy.simpleChat(textModel.getModel(), qaPrompt, qa.getSegmentContent(), true);
@@ -1463,7 +1662,7 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
                             }))
                             .toList();
                     // 等待所有异步任务完成
-                    CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                    CompletableFuture.allOf(qaFutures.toArray(new CompletableFuture[0])).join();
 
                     // QA提取完成，确保更新为总数
                     knowledgeFileProgressService.updateQaProgress(item.getId(), totalQaSegments);
@@ -1488,7 +1687,7 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
                                     .createBy(userId)
                                     .build())
                             .toList();
-                    qaImproveService.addBatch(qaImproveList, knowledgeBaseId);
+                    qaImproveService.addBatch(qaImproveList, knowledgeBaseId, userId);
 
                     // QA提取完成后，向量化进度直接设置为QA的数量
                     knowledgeFileProgressService.updateVectorProgress(item.getId(), fileSegments.size());
@@ -1503,23 +1702,32 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
                         LLMModel embeddingModel = llmModelService.queryEmbeddingModelByKnowledgeId(knowledgeBaseId);
                         ChatModelStrategy embeddingStrategy = chatModelStrategyFactory.getStrategy(embeddingModel.getProviderCode());
 
-                        // 执行向量化（批量处理）
+                        // 执行向量化（批量处理，按4个一组分批，每批更新进度）
                         int totalContents = contents.size();
+                        int finishedCount = 0;
 
-                        // 开始向量化
-                        List<float[]> embeddings = embeddingStrategy.embedding(embeddingModel.getModel(), contents);
+                        // 分批处理，每批最多4个
+                        List<List<String>> batches = CollUtil.split(contents, 4);
+                        List<float[]> allEmbeddings = new ArrayList<>();
+
+                        for (List<String> batch : batches) {
+                            // 批量调用embedding
+                            List<float[]> batchEmbeddings = embeddingStrategy.embedding(embeddingModel.getModel(), batch, userId);
+                            allEmbeddings.addAll(batchEmbeddings);
+
+                            // 更新进度
+                            finishedCount += batch.size();
+                            knowledgeFileProgressService.updateVectorProgress(item.getId(), finishedCount);
+                        }
 
                         // 更新分段的向量
                         for (int i = 0; i < fileSegments.size(); i++) {
-                            fileSegments.get(i).setVector(embeddings.get(i));
+                            fileSegments.get(i).setVector(allEmbeddings.get(i));
                             fileSegments.get(i).setVectorFlag(true);
                         }
 
                         // 批量更新到数据库
                         knowledgeFileSegmentService.updateBatchById(fileSegments);
-
-                        // 向量化完成，更新为总数
-                        knowledgeFileProgressService.updateVectorProgress(item.getId(), totalContents);
                     }
                     // 如果没有内容需要向量化，保持为0（不更新）
                 }
@@ -1532,7 +1740,14 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
                 item.setStatus(4); // 设置为处理失败状态
                 item.setProcessingStatus("处理失败");
             }
-        });
+        })).toList();
+
+        try {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        } catch (Exception e) {
+            log.error("批量处理向量时发生错误", e);
+        }
+
         this.updateBatchById(knowledgeFiles);
     }
 
@@ -2066,15 +2281,15 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
                         && fileSize <= 10 * 1024 * 1024) {
                     try {
                         // 生成外网可访问的URL
-//                        String url = ossService.getHttpUrl(s3Path);
-//                        QwenAiService.AiAnalysisResult aiResult = qwenAiService.analyzeFile(url, fileName);
-//
-//                        if (summary == null || summary.trim().isEmpty()) {
-//                            summary = aiResult.getSummary();
-//                        }
-//                        if (tags == null || tags.trim().isEmpty()) {
-//                            tags = String.join(",", aiResult.getTags());
-//                        }
+                        String url = ossService.getHttpUrl(s3Path);
+                        QwenAiService.AiAnalysisResult aiResult = qwenAiService.analyzeFile(url, fileName);
+
+                        if (summary == null || summary.trim().isEmpty()) {
+                            summary = aiResult.getSummary();
+                        }
+                        if (tags == null || tags.trim().isEmpty()) {
+                            tags = String.join(",", aiResult.getTags());
+                        }
                     } catch (Exception e) {
                         log.warn("AI分析在线创建的文件失败，使用默认值: {}", fileName, e);
                         if (summary == null || summary.trim().isEmpty()) {
@@ -2207,229 +2422,5 @@ public class KnowledgeFileService extends MPJBaseServiceImpl<KnowledgeFileMapper
 
         log.warn("无效的图片URL格式: {}", url);
         return false;
-    }
-
-    /**
-     * 执行 Docker MinerU 解析
-     * @param inputFilePath 输入文件的本地路径
-     * @param outputBaseDir 输出基础目录
-     * @param fileName 文件名
-     * @return 生成的 markdown 文件路径
-     */
-    private String executeMinerUDocker(String inputFilePath, String outputBaseDir, String fileName) {
-        try {
-            log.info("开始执行 Docker MinerU 解析，输入文件: {}, 输出目录: {}", inputFilePath, outputBaseDir);
-
-            // 检查缓存：如果已经解析过（基于 fileMd5），直接使用缓存结果
-            // 优先查找当前文件名对应的缓存
-            String filePrefix = FileUtil.getPrefix(fileName);
-            String cachedMdPath = outputBaseDir + File.separator + filePrefix + File.separator + "auto" + File.separator + filePrefix + ".md";
-
-            if (FileUtil.exist(cachedMdPath)) {
-                log.info("发现缓存的 MinerU 解析结果（文件名匹配），直接使用: {}", cachedMdPath);
-                return cachedMdPath;
-            }
-
-            // 如果当前文件名的缓存不存在，查找 fileMd5 目录下是否有其他文件名的解析结果
-            // 因为 MD5 相同说明文件内容相同，可以复用之前的解析结果
-            if (FileUtil.exist(outputBaseDir)) {
-                File[] subDirs = FileUtil.file(outputBaseDir).listFiles(File::isDirectory);
-                if (subDirs != null && subDirs.length > 0) {
-                    // 遍历所有子目录，查找第一个有效的 .md 文件
-                    for (File subDir : subDirs) {
-                        File autoDir = new File(subDir, "auto");
-                        if (autoDir.exists() && autoDir.isDirectory()) {
-                            File[] mdFiles = autoDir.listFiles((dir, name) -> name.endsWith(".md"));
-                            if (mdFiles != null && mdFiles.length > 0) {
-                                String existingMdPath = mdFiles[0].getAbsolutePath();
-                                log.info("发现缓存的 MinerU 解析结果（相同 MD5，不同文件名），直接使用: {}", existingMdPath);
-                                return existingMdPath;
-                            }
-                        }
-                    }
-                }
-            }
-
-            log.info("未找到缓存，开始执行 Docker MinerU 解析...");
-
-            // 创建输出目录
-            FileUtil.mkdir(outputBaseDir);
-
-            // 获取输入文件所在目录
-            String inputDir = FileUtil.getParent(inputFilePath, 1);
-
-            // 将容器内路径转换为宿主机路径（用于 Docker 挂载）
-            // 容器内路径: /uploadPath/xxx -> 宿主机路径: /uploadPath/wudao-kms/uploadPath/xxx
-            String hostInputDir = convertContainerPathToHostPath(inputDir);
-            String hostOutputDir = convertContainerPathToHostPath(outputBaseDir);
-
-            log.info("路径转换 - 输入目录: 容器内[{}] -> 宿主机[{}]", inputDir, hostInputDir);
-            log.info("路径转换 - 输出目录: 容器内[{}] -> 宿主机[{}]", outputBaseDir, hostOutputDir);
-
-            // 配置 Docker 挂载目录（使用宿主机路径）
-            Bind inputBind = new Bind(hostInputDir, new Volume("/data/input"));
-            Bind outputBind = new Bind(hostOutputDir, new Volume("/data/output"));
-
-            // 配置 NVIDIA GPU
-            DeviceRequest nvidia = new DeviceRequest()
-                .withDriver("nvidia")
-                .withCount(-1)
-                .withCapabilities(Arrays.asList(Arrays.asList("gpu")));
-
-            // 配置 Host Config
-            HostConfig hostConfig = HostConfig.newHostConfig()
-                .withRuntime("nvidia")
-                .withDeviceRequests(Collections.singletonList(nvidia))
-                .withBinds(inputBind, outputBind);
-
-            // 创建容器
-            CreateContainerResponse containerResponse = dockerClient
-                .createContainerCmd(minerUImage)
-                .withWorkingDir("/vllm-workspace")
-                .withHostConfig(hostConfig)
-                .withCmd("mineru", "-p", "/data/input/" + fileName, "-o", "/data/output",
-                         "--source", "modelscope", "--b", "vlm-mlx-engine")
-                .exec();
-
-            String containerId = containerResponse.getId();
-            log.info("Docker 容器已创建，容器ID: {}", containerId);
-
-            // 启动容器
-            dockerClient.startContainerCmd(containerId).exec();
-            log.info("Docker 容器已启动，等待执行完成（超时时间：30分钟）...");
-
-            // 等待容器执行完成，设置超时时间为 30 分钟
-            Integer statusCode = dockerClient.waitContainerCmd(containerId)
-                .exec(new WaitContainerResultCallback())
-                .awaitStatusCode(30, TimeUnit.MINUTES);
-
-            log.info("Docker 容器执行完成，状态码: {}", statusCode);
-
-            // 删除容器
-            try {
-                dockerClient.removeContainerCmd(containerId).exec();
-                log.info("Docker 容器已删除");
-            } catch (Exception e) {
-                log.warn("删除容器失败: {}", e.getMessage());
-            }
-
-            // 返回生成的 markdown 文件路径
-            String mdPath = outputBaseDir + File.separator + filePrefix + File.separator + "auto" + File.separator + filePrefix + ".md";
-
-            if (!FileUtil.exist(mdPath)) {
-                throw new RuntimeException("MinerU 解析失败，未找到输出文件: " + mdPath);
-            }
-
-            log.info("MinerU 解析成功，markdown 文件: {}", mdPath);
-            return mdPath;
-
-        } catch (Exception e) {
-            log.error("执行 Docker MinerU 解析失败: {}", e.getMessage(), e);
-            throw new RuntimeException("Docker MinerU 解析失败: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 处理 Docker MinerU 结果，上传图片到 OSS 并替换路径
-     * @param markdownPath 生成的 markdown 文件路径
-     * @param outputBaseDir 输出基础目录
-     * @param fileName 原始文件名
-     * @return 处理后的 markdown 内容
-     */
-    private String processDockerMinerUResult(String markdownPath, String outputBaseDir, String fileName) {
-        try {
-            log.info("开始处理 Docker MinerU 结果，markdown: {}", markdownPath);
-
-            // 1. 读取 markdown 内容
-            String content = FileUtil.readUtf8String(markdownPath);
-
-            // 2. 获取 images 目录路径
-            String filePrefix = FileUtil.getPrefix(fileName);
-            String imagesDir = outputBaseDir + File.separator + filePrefix + File.separator + "auto" + File.separator + "images";
-
-            if (!FileUtil.exist(imagesDir)) {
-                log.warn("未找到 images 目录，跳过图片处理: {}", imagesDir);
-                return content;
-            }
-
-            // 3. 正则匹配图片引用：![alt](images/xxx.jpg)
-            Pattern imagePattern = Pattern.compile("!\\[([^\\]]*)\\]\\((images/[^\\)]+)\\)");
-            Matcher matcher = imagePattern.matcher(content);
-
-            StringBuilder result = new StringBuilder();
-            int processedCount = 0;
-
-            while (matcher.find()) {
-                String altText = matcher.group(1);
-                String imagePath = matcher.group(2);  // 例如：images/xxx.jpg
-
-                try {
-                    // 4. 上传图片到 OSS
-                    String localImagePath = outputBaseDir + File.separator + filePrefix + File.separator + "auto" + File.separator + imagePath;
-
-                    if (!FileUtil.exist(localImagePath)) {
-                        log.warn("图片文件不存在，跳过: {}", localImagePath);
-                        matcher.appendReplacement(result, matcher.group(0));
-                        continue;
-                    }
-
-                    // 生成 OSS 路径
-                    String imageFileName = FileUtil.getName(localImagePath);
-                    String s3Key = String.format("wudao/kms/mineru-images/%s/%s",
-                        LocalDateTime.now().toLocalDate(),
-                        IdUtil.randomUUID() + "." + FileUtil.extName(imageFileName));
-
-                    // 上传到 OSS
-                    ossService.putObject(localImagePath, s3Key);
-                    String httpsUrl = ossService.getHttpUrl(s3Key);
-
-                    // 5. 替换为 OSS URL
-                    String replacement = String.format("![%s](%s)", altText, httpsUrl);
-                    matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
-
-                    processedCount++;
-                    log.info("图片上传成功 [{}/{}]: {} -> {}", processedCount, imagePath, localImagePath, httpsUrl);
-
-                } catch (Exception e) {
-                    log.error("图片上传失败: {}, 错误: {}", imagePath, e.getMessage());
-                    // 保持原样
-                    matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group(0)));
-                }
-            }
-            matcher.appendTail(result);
-
-            log.info("Docker MinerU 结果处理完成，共处理 {} 张图片", processedCount);
-            return result.toString();
-
-        } catch (Exception e) {
-            log.error("处理 Docker MinerU 结果失败: {}", e.getMessage(), e);
-            throw new RuntimeException("处理 Docker MinerU 结果失败: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 将容器内路径转换为宿主机路径
-     * 当 KMS 服务运行在容器中时，需要将容器内的路径转换为宿主机路径，才能正确挂载到新创建的 Docker 容器
-     *
-     * @param containerPath 容器内路径，例如：/uploadPath/mineru_output/abc123
-     * @return 宿主机路径，例如：/uploadPath/wudao-kms/uploadPath/mineru_output/abc123
-     */
-    private String convertContainerPathToHostPath(String containerPath) {
-        // 如果路径不是以 basicProfile 开头，说明可能已经是宿主机路径或其他路径，直接返回
-        if (!containerPath.startsWith(basicProfile)) {
-            log.warn("路径 [{}] 不以 basicProfile [{}] 开头，直接使用原路径", containerPath, basicProfile);
-            return containerPath;
-        }
-
-        // 将容器内路径转换为宿主机路径
-        // 容器内路径: /uploadPath/mineru_output/abc123
-        // basicProfile: /uploadPath
-        // dockerBindPath: /uploadPath/wudao-kms/uploadPath
-        // 结果: /uploadPath/wudao-kms/uploadPath/mineru_output/abc123
-
-        String relativePath = containerPath.substring(basicProfile.length());
-        String hostPath = dockerBindPath + relativePath;
-
-        return hostPath;
     }
 }

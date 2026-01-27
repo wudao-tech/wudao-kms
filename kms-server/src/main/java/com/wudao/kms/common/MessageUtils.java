@@ -44,6 +44,7 @@ public class MessageUtils
             MessageSource messageSource = SpringUtil.getBean(MessageSource.class);
             return messageSource.getMessage(code, null, LocaleContextHolder.getLocale());
 		} catch (org.springframework.context.NoSuchMessageException e) {
+			// TODO: handle exception
 			//log.error("code is not fund :{}",code);
 			return code;
 		}
@@ -57,6 +58,7 @@ public class MessageUtils
             MessageSource messageSource = SpringUtil.getBean(MessageSource.class);
             return messageSource.getMessage(code, null, locale);
 		} catch (org.springframework.context.NoSuchMessageException e) {
+			// TODO: handle exception
 			//log.error("code is not fund :{}",code);
 			return code;
 		}
@@ -77,6 +79,7 @@ public class MessageUtils
             MessageSource messageSource = SpringUtil.getBean(MessageSource.class);
             return messageSource.getMessage(code, null, Locale.CHINESE);
 		} catch (org.springframework.context.NoSuchMessageException e) {
+			// TODO: handle exception
 			//log.error("code is not fund :{}",code);
 			return code;
 		}
@@ -95,6 +98,7 @@ public class MessageUtils
             }
             return message;
 		} catch (org.springframework.context.NoSuchMessageException e) {
+			// TODO: handle exception
 			//log.error("code is not fund :{}",code);
 			return code;
 		}
@@ -121,6 +125,7 @@ public class MessageUtils
             }
             return message;
 		} catch (org.springframework.context.NoSuchMessageException e) {
+			// TODO: handle exception
 			//log.error("code is not fund :{}",code);
 			return code;
 		}
@@ -133,6 +138,7 @@ public class MessageUtils
             MessageSource messageSource = SpringUtil.getBean(MessageSource.class);
             return messageSource.getMessage(code, args, Locale.ENGLISH);
 		} catch (org.springframework.context.NoSuchMessageException e) {
+			// TODO: handle exception
 			//log.error("code is not fund :{}",code);
 			return code;
 		}

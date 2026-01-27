@@ -26,13 +26,12 @@
           <div class="segment-header">
             <span class="segment-index">段落 {{ segment.segmentIndex || (index + 1) }}  <span style="font-size: 12px;color: #909399;">{{ segment.length }} 字符</span></span>
             <div class="segment-actions">
-              <el-button v-if="editingIndex === index" link size="small" icon="Upload" @click="uploadImage(index)" >上传图片</el-button>
+              <el-button v-if="editingIndex === index && props.permission" link size="small" icon="Upload" @click="uploadImage(index)" >上传图片</el-button>
               <el-button
-                v-if="editingIndex !== index"
+                v-if="editingIndex !== index && props.permission"
                 link
                 size="small" 
                 icon="Edit" 
-                :disabled="!props.permission"
                 @click="editSegment(index)"
                 style="margin-left: 8px;"
               >
@@ -198,6 +197,14 @@ const totalCharacters = computed(() => {
   }, 0)
 })
 
+// 格式化内容：将 <br> 转换为 \n 文本，将 \t 转换为 \t 文本
+const formatContent = (content) => {
+  if (!content) return ''
+  return content
+    .replace(/<br\s*\/?>/gi, '\\n') // 替换 <br> 为 \n 字符串
+    .replace(/\t/g, '\\t')          // 替换制表符为 \t 字符串
+}
+
 // 通过fileId加载段落数据
 const loadMdContentByFileId = async (fileId) => {
   isLoading.value = true
@@ -210,12 +217,17 @@ const loadMdContentByFileId = async (fileId) => {
       const segmentsData = response.data
       
       segments.value = segmentsData.map((item, index) => {
+        // 原始内容用于计算长度
+        const rawContent = item.segmentContent || ''
+        // 格式化后的内容用于显示
+        const formattedContent = formatContent(rawContent)
+        
         // 只计算中文字符、英文字母、数字，不计算标点符号和特殊字符
-        const textOnly = (item.segmentContent || '').replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '')
+        const textOnly = rawContent.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '')
         return {
           id: item.id,
           index: index,
-          content: item.segmentContent || '',
+          content: formattedContent,
           length: textOnly.length
         }
       })     
@@ -248,12 +260,14 @@ const loadMdContent = async (fileMd5) => {
       const segmentsData = response.data
       // 将接口数据转换为组件需要的格式
       segments.value = segmentsData.map((item, index) => {
-        const content = item.segmentContent || ''
+        const rawContent = item.segmentContent || ''
+        const formattedContent = formatContent(rawContent)
+        
         // 只计算中文字符、英文字母、数字，不计算标点符号和特殊字符
-        const textOnly = content.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '')
+        const textOnly = rawContent.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '')
         return {
           ...item,
-          content: content,
+          content: formattedContent,
           length: textOnly.length
         }
       })     
@@ -285,16 +299,16 @@ watch([() => props.fileMd5, () => props.sseCompleted], async ([newFileMd5, sseCo
 }, { immediate: true })
 
 // 监听 fileId 变化
-// watch([() => props.fileId, ], async ([newFileId]) => {
-//   console.log('newFileId', newFileId)
-//   if (newFileId) {
-//     await loadMdContentByFileId(newFileId)
-//   } else {
-//     mdContent.value = ''
-//     segments.value = []
-//     currentSegmentIndex.value = -1
-//   }
-// }, { immediate: true })
+watch([() => props.fileId, ], async ([newFileId]) => {
+  console.log('newFileId', newFileId)
+  if (newFileId) {
+    await loadMdContentByFileId(newFileId)
+  } else {
+    mdContent.value = ''
+    segments.value = []
+    currentSegmentIndex.value = -1
+  }
+}, { immediate: true })
 
 // 解析MD内容为段落
 const parseMdToSegments = (content) => {
@@ -609,12 +623,13 @@ defineExpose({
 
 .segment-item {
   margin-bottom: 16px;
-  padding: 12px;
+  padding: 0;
   background: white;
   border: 1px solid #e4e7ed;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.3s ease;
+  overflow: hidden;
   
   &:hover {
     border-color: #409eff;
@@ -631,7 +646,11 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px; 
+  margin-bottom: 0;
+  padding: 10px 12px;
+  background-color: #f9fafc;
+  border-bottom: 1px solid #ebeef5;
+  
   .segment-index {
     font-weight: 500;
     color: #303133;
@@ -650,6 +669,7 @@ defineExpose({
 
 .segment-content {
   cursor: pointer;
+  padding: 8px;
   
   .edit-mode {
     // Markdown 编辑器样式（暂时注释）
@@ -722,6 +742,21 @@ defineExpose({
     :deep(.v-md-editor-preview-wrapper) {
       padding: 0;
     }
+
+    // 覆盖 vuepress 主题默认的大内边距
+    :deep(.vuepress-markdown-body) {
+      padding: 0 !important;
+      background-color: transparent !important;
+      color: #303133 !important;
+      
+      // 去除首尾元素的 margin，消除多余留白
+      > *:first-child {
+        margin-top: 0 !important;
+      }
+      > *:last-child {
+        margin-bottom: 0 !important;
+      }
+    }
     
     :deep(h1, h2, h3, h4, h5, h6) {
       margin-top: 0;
@@ -767,6 +802,59 @@ defineExpose({
       margin: 8px 0;
       border-radius: 4px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    // 表格样式优化
+    :deep(table) {
+      width: auto;
+      min-width: 100%;
+      border-collapse: collapse;
+      border-spacing: 0;
+      margin: 8px 0;
+      font-size: 13px;
+      table-layout: auto;
+      border: 1px solid #e4e7ed;
+      border-radius: 4px;
+
+      thead {
+        tr {
+          background: #f5f7fa;
+
+          th {
+            color: #303133;
+            font-weight: 600;
+            padding: 8px 10px;
+            text-align: left;
+            border: 1px solid #e4e7ed;
+            white-space: normal;
+          }
+        }
+      }
+
+      tbody {
+        tr {
+          background: #fff;
+          transition: background-color 0.2s;
+
+          &:nth-child(even) {
+            background: #fafafa;
+          }
+
+          &:hover {
+            background: #f5f7fa;
+          }
+
+          td {
+            padding: 4px 8px;
+            border: 1px solid #e4e7ed;
+            color: #303133;
+            vertical-align: top;
+            line-height: 1.5;
+            white-space: normal;
+            word-break: break-all;
+          }
+        }
+      }
     }
   }
 }

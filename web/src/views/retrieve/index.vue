@@ -142,17 +142,21 @@
     <div v-if="showSearchResults" class="search-results-page">
       <!-- 搜索结果标题 -->
       <div class="search-results-header">
-        <div style="display: flex;align-items: center;gap: 20px;">
-          <div style="text-align: center;">
-            <div>{{ summary.totalFiles }}</div>
-            <div style="margin-top: 5px;">文件总数</div>
+        
+        <div style="flex: 1; display: flex; align-items: center; justify-content: space-between;">
+          <el-button link icon="Back" @click="handleBack">返回</el-button>
+          <div style="display: flex;align-items: center;gap: 20px;">
+            <div style="text-align: center;">
+              <div>{{ summary.totalFiles }}</div>
+              <div style="margin-top: 5px;">文件总数</div>
+            </div>
+            <div style="width: 1px;height: 40px; background: #979797;"></div>
+            <div style="text-align: center;">
+              <div>{{ summary.todayNewFiles }}</div>
+              <div style="margin-top: 5px;">今日上新</div>
+            </div>
+            
           </div>
-          <div style="width: 1px;height: 40px; background: #979797;"></div>
-          <div style="text-align: center;">
-            <div>{{ summary.todayNewFiles }}</div>
-            <div style="margin-top: 5px;">今日上新</div>
-          </div>
-          
         </div>
         <div class="search-input-wrapper">
           <input 
@@ -181,7 +185,7 @@
             </div>
           </div>
         </div>
-        <div class="advanced-settings">
+        <div class="advanced-settings" style="flex: 1;">
           <!-- <el-icon :size="18" style="cursor: pointer;"><Setting /></el-icon>
           <span @click="openSettings" style="cursor: pointer;">高级设置</span>
           <svg-icon icon-class="retrieve_search" style="margin-left: 10px;color: rgba(0, 0, 0, 0.6);font-size: 14px;" />
@@ -216,7 +220,7 @@
             <!-- <el-select v-model="filters.knowledgeSpace" style="width: 150px;" clearable>
               
             </el-select> -->
-            <el-cascader :options="options"  v-model="filters.knowledgeBaseIds" :props="defaultProps" :show-all-levels="false" clearable style="width: 150px;" />
+            <el-cascader :options="options"  v-model="spaceArrIds" @change="handleKnowledgeBaseChange" :props="defaultProps" :show-all-levels="false" clearable style="width: 150px;" />
           </div>
           <div class="filter-item">
             <label>更新时间</label>
@@ -258,14 +262,21 @@
             <div class="result-title" v-html="highlightKeyword(result.highlight, result.answerType === 'QA')"></div>
             <div class="result-meta">
               <div  style="display: flex;align-items: center;gap: 50px;">
-                <span class="result-meta-target"  @click="goDetail(result.document_id || 0, result)">
+                <span class="result-meta-target">
                   <span v-if="result.answerType === 'QA'" style="display: flex;align-items: center;gap: 5px;">
-                    <img  src="@/assets/images/qa.png" style="width: 16px;" alt="" />
-                    {{ result.knowledgeBaseName }} <el-icon><ArrowRight /></el-icon> {{ result.knowledgeSpaceName }}
+                    <img src="@/assets/images/qa.png" style="width: 16px;" alt="" />
+                    <el-breadcrumb :separator-icon="ArrowRight">
+                      <el-breadcrumb-item><span class="breadcrumb-link" @click.stop="goToKnowledgeBase(result)">{{ result.knowledgeBaseName }}</span></el-breadcrumb-item>
+                      <el-breadcrumb-item><span class="breadcrumb-link" style="cursor: pointer;" @click.stop="goToKnowledgeSpace(result)">{{ result.knowledgeSpaceName }}</span></el-breadcrumb-item>
+                    </el-breadcrumb>
                   </span>
                   <span v-else style="display: flex;align-items: center;gap: 5px;">
                     <img :src="getFilePath(result.filename)" style="width: 16px;" alt=""> 
-                    {{ result.filename }}
+                    <el-breadcrumb :separator-icon="ArrowRight">
+                      <el-breadcrumb-item><span class="breadcrumb-link" @click.stop="goToKnowledgeBase(result)">{{ result.knowledgeBaseName }}</span></el-breadcrumb-item>
+                      <el-breadcrumb-item><span class="breadcrumb-link" @click.stop="goToKnowledgeSpace(result)">{{ result.knowledgeSpaceName }}</span></el-breadcrumb-item>
+                      <el-breadcrumb-item><span class="breadcrumb-link" style="cursor: pointer;" @click.stop="goToFileDetail(result)">{{ result.filename }}</span></el-breadcrumb-item>
+                    </el-breadcrumb> 
                   </span>
                 </span>
                 <span v-for="itme in result.tags" :key="itme"><el-divider direction="vertical" />{{ itme }}</span>
@@ -308,6 +319,7 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
+import { ArrowRight } from '@element-plus/icons-vue'
 import { 
   getKnowledgeRetrieveSummary, 
   getKnowledgeRetrieveRecommend, 
@@ -401,8 +413,8 @@ const searchSuggestions = ref([])
 // 筛选条件
 const filters = ref({
   fileType: '',
-  knowledgeBaseIds: [],
-  knowledgeId: [],
+  knowledgeBaseIds: null,
+  knowledgeId: null,
   updateTime: 'ALL'
 })
 
@@ -420,6 +432,8 @@ const sortOptions = [
 ]
 
 const loading = ref(false)
+
+const spaceArrIds = ref([])
 
 // 知识列表 loading 状态
 const latestKnowledgeLoading = ref(false)
@@ -474,14 +488,6 @@ const handleSearchInput = () => {
     clearTimeout(searchTimer)
   }
   
-  // 如果没有输入内容，直接返回
-  if (!queryParams.value.query.trim()) {
-    showSearchResults.value = false
-    setTimeout(() => {
-      searchInputRef.value.focus()
-    })
-    return
-  }
   // 设置防抖延迟
   searchTimer = setTimeout(() => {
     getKnowledgeRetrieveSearch({
@@ -572,6 +578,12 @@ const selectSuggestion = (suggestion) => {
   queryParams.value.query = suggestion
   showSearchDropdown.value = false
   performSearch()
+}
+
+// 返回首页
+const handleBack = () => {
+  queryParams.value.query = ''
+  showSearchResults.value = false
 }
 
 const performSearch = () => {
@@ -693,6 +705,99 @@ const goDetail = (id, item) => {
  
 }
 
+// 跳转到知识库详情（第一个面包屑）
+const goToKnowledgeBase = (item) => {
+  const query = {
+    from: 'space/retrieve',
+    type: 3,
+    permissionType: item.permissionType,
+    id: item.knowledgeBaseId,
+    name: item.knowledgeBaseName,
+    // 保存搜索状态
+    fromSearch: showSearchResults.value ? 'true' : 'false',
+    searchQuery: queryParams.value.query,
+    searchType: queryParams.value.searchType,
+    ragTopK: queryParams.value.ragTopK,
+    ragScore: queryParams.value.ragScore,
+    source: queryParams.value.source,
+    // 保存筛选状态
+    fileType: filters.value.fileType,
+    knowledgeBaseIds: JSON.stringify(filters.value.knowledgeBaseIds),
+    knowledgeId: JSON.stringify(filters.value.knowledgeId),
+    updateTime: filters.value.updateTime,
+    // 保存排序状态
+    currentSort: currentSort.value,
+    sortDirection: JSON.stringify(sortDirection.value)
+  }
+  // QA类型需要加上tab参数
+  if (item.answerType === 'QA') {
+    query.tab = 1
+  }
+  router.push({
+    path: '/space/knowledge',
+    query
+  })
+}
+
+// 跳转到知识空间详情（第二个面包屑，精确到空间id）
+const goToKnowledgeSpace = (item) => {
+  const query = {
+    from: 'space/retrieve',
+    type: 3,
+    permissionType: item.permissionType,
+    id: item.knowledgeBaseId,
+    name: item.knowledgeBaseName,
+    spaceId: item.knowledgeSpaceId,
+    // 保存搜索状态
+    fromSearch: showSearchResults.value ? 'true' : 'false',
+    searchQuery: queryParams.value.query,
+    searchType: queryParams.value.searchType,
+    ragTopK: queryParams.value.ragTopK,
+    ragScore: queryParams.value.ragScore,
+    source: queryParams.value.source,
+    // 保存筛选状态
+    fileType: filters.value.fileType,
+    knowledgeBaseIds: JSON.stringify(filters.value.knowledgeBaseIds),
+    knowledgeId: JSON.stringify(filters.value.knowledgeId),
+    updateTime: filters.value.updateTime,
+    // 保存排序状态
+    currentSort: currentSort.value,
+    sortDirection: JSON.stringify(sortDirection.value)
+  }
+  // QA类型需要加上tab参数
+  if (item.answerType === 'QA') {
+    query.tab = 1
+  }
+  router.push({
+    path: '/space/knowledge',
+    query
+  })
+}
+
+// 跳转到文件详情（第三个面包屑）
+const goToFileDetail = (item) => {
+  const currentState = {
+    id: item.document_id || 0,
+    // 保存搜索状态
+    fromSearch: showSearchResults.value,
+    searchQuery: queryParams.value.query,
+    searchType: queryParams.value.searchType,
+    source: queryParams.value.source,
+    // 保存筛选状态
+    fileType: filters.value.fileType,
+    knowledgeBaseIds: JSON.stringify(filters.value.knowledgeBaseIds),
+    knowledgeId: JSON.stringify(filters.value.knowledgeId),
+    updateTime: filters.value.updateTime,
+    // 保存排序状态
+    currentSort: currentSort.value,
+    sortDirection: JSON.stringify(sortDirection.value)
+  }
+  router.push({
+    path: '/space/retrieve/detail',
+    query: currentState
+  })
+}
+
 let getList = async () => {
   const res = await getKnowledgeRetrieveSummary()
   summary.value = res.data
@@ -734,14 +839,28 @@ let getList = async () => {
   }
 }
 
-watch(filters.value, (newVal) => {
+const handleKnowledgeBaseChange = (value) => {
+  console.log('value', value)
+  if (value && value.length === 1) {
+    filters.value.knowledgeId = value[0]
+    filters.value.knowledgeBaseIds = null
+  } else if (value && value.length > 1) {
+    filters.value.knowledgeBaseIds = value[1]
+    filters.value.knowledgeId = value[0]
+  } else {
+    filters.value.knowledgeBaseIds = null
+    filters.value.knowledgeId = null
+  } 
+}
+
+watch(filters, (newVal) => {
   console.log('newVal', newVal)
   queryParams.value = {
     ... queryParams.value,
     fileType: fileType.value === 'all' ? '' : fileType.value,
     ... newVal,
-    knowledgeBaseIds: newVal.knowledgeBaseIds != undefined && newVal.knowledgeBaseIds.length > 0 ? [newVal.knowledgeBaseIds[newVal.knowledgeBaseIds.length - 1]] : [],
-    knowledgeId: newVal.knowledgeBaseIds != undefined && newVal.knowledgeBaseIds.length > 0 ? [newVal.knowledgeBaseIds[0]] : [] 
+    knowledgeBaseIds: newVal.knowledgeBaseIds != null ?  [newVal.knowledgeBaseIds] : [],
+    knowledgeId: newVal.knowledgeId != null ?  [newVal.knowledgeId] : [] 
   }
   console.log('queryParams.value', queryParams.value)
   performSearch()
@@ -1037,7 +1156,7 @@ const stopPlaceholderCarousel = () => {
       align-items: center;
       justify-content: center;
       gap: 20px;
-      padding: 20px 0;
+      padding: 20px;
       border-bottom: 1px solid #eee;
       
       .search-results-title {

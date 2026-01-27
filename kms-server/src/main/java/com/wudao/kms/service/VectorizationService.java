@@ -2,7 +2,6 @@ package com.wudao.kms.service;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
-import cn.hutool.core.util.StrUtil;
 import com.alibaba.dashscope.rerank.TextReRank;
 import com.alibaba.dashscope.rerank.TextReRankOutput;
 import com.alibaba.dashscope.rerank.TextReRankParam;
@@ -18,6 +17,7 @@ import com.wudao.kms.dto.KnowledgeSearchResult;
 import com.wudao.kms.dto.KnowledgeTestDTO;
 import com.wudao.kms.dto.RerankResp;
 import com.wudao.kms.entity.KnowledgeBase;
+import com.wudao.kms.entity.KnowledgeBasePermission;
 import com.wudao.kms.entity.KnowledgeFile;
 import com.wudao.kms.entity.KnowledgeFileSegment;
 import com.wudao.kms.entity.SearchHistory;
@@ -77,6 +77,9 @@ public class VectorizationService {
 
     @Resource
     private SearchHistoryService searchHistoryService;
+
+    @Resource
+    private KnowledgeBasePermissionService knowledgeBasePermissionService;
     private final LLMModelService llmModelService;
 
 
@@ -245,7 +248,8 @@ public class VectorizationService {
 
             knowledgeMap.forEach((key,value) -> {
                 LLMModel llmModel = llmMap.get(key);
-                float[] queryVector = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode()).embedding(llmModel.getModel(), List.of(knowledgeTestDTO.getQuery())).getFirst();
+                float[] queryVector = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode()).embedding(llmModel.getModel(), List.of(knowledgeTestDTO.getQuery()),
+                        knowledgeTestDTO.getUserId()).getFirst();
                 knowledgeTestDTO.setVector(queryVector);
                 List<Long> knowledgeIds = value.stream().map(KnowledgeBase::getId).toList();
                 knowledgeTestDTO.setKnowledgeIds(knowledgeIds);
@@ -268,19 +272,7 @@ public class VectorizationService {
             }
 
             // 对于混合检索，需要按照id去重（全文+语义可能返回相同的结果）
-            List<KnowledgeSearchResult> results;
-            if ("hybrid".equals(searchType)) {
-                Map<String, KnowledgeSearchResult> deduplicatedMap = new LinkedHashMap<>();
-                for (KnowledgeSearchResult result : allResults) {
-                    String id = result.getId();
-                    if (StringUtil.isNotBlank(id)) {
-                        deduplicatedMap.putIfAbsent(id, result);
-                    }
-                }
-                results = new ArrayList<>(deduplicatedMap.values());
-            } else {
-                results = allResults;
-            }
+            List<KnowledgeSearchResult> results = allResults;
 
             // 统一处理重排功能
             results.sort(Comparator.comparing(KnowledgeSearchResult::getScore).reversed());
@@ -299,7 +291,7 @@ public class VectorizationService {
 
             if (StringUtil.isNotBlank(knowledgeTestDTO.getRerankModel()) && CollUtil.isNotEmpty(results)) {
                 log.debug("开始执行重排功能，重排类型: {}", knowledgeTestDTO.getRerankModel());
-                results = new ArrayList<>(performRerank(results, knowledgeTestDTO.getRerankModel(), knowledgeTestDTO.getQuery()));
+                results = new ArrayList<>(performRerank(results, knowledgeTestDTO.getRerankModel(), knowledgeTestDTO.getQuery(), knowledgeTestDTO.getUserId()));
                 if (knowledgeTestDTO.getRerankScore() != null) {
                     results = results.stream().filter(item -> item.getRerankScore() >= knowledgeTestDTO.getRerankScore()).collect(Collectors.toList());
                 }
@@ -325,6 +317,27 @@ public class VectorizationService {
                     item.setViewCount(fileVisit.get(item.getDocumentId()));
                 }
             });
+            // 增加知识库的权限
+            if (knowledgeTestDTO.getUserId() != null) {
+                // 获取用户对知识库的权限信息
+                List<KnowledgeBasePermission> knowledgePermissions =
+                    knowledgeBasePermissionService.getKnowledgeBaseByUserId(knowledgeTestDTO.getUserId());
+                // 构建知识库ID -> 权限对象的映射
+                Map<Long, KnowledgeBasePermission> permissionMap = knowledgePermissions.stream()
+                    .collect(Collectors.toMap(KnowledgeBasePermission::getKnowledgeBaseId, p -> p, (p1, p2) -> p1));
+
+                // 为每个搜索结果设置权限类型
+                results.stream()
+                    .filter(item -> item.getKnowledgeBaseId() != null)
+                    .forEach(item -> {
+                        KnowledgeBasePermission permission = permissionMap.get(item.getKnowledgeBaseId());
+                        if (permission != null) {
+                            item.setPermissionType(permission.getPermissionType());
+                        } else {
+                            item.setPermissionType(3); // 没有权限记录时设置为3
+                        }
+                    });
+            }
             return results;
 
         } catch (Exception e) {
@@ -471,10 +484,6 @@ public class VectorizationService {
                 knowledgeTestDTO.getFileType()
         );
 
-        results.stream()
-                .filter(item -> StrUtil.isNotBlank(item.getVlContent()))
-                .forEach(item -> item.setContent(item.getContent().concat(item.getVlContent())));
-
         if (CollUtil.isEmpty(results)) {
             log.info("向量搜索未找到匹配结果");
             return new ArrayList<>();
@@ -588,7 +597,7 @@ public class VectorizationService {
             }
 
             // 使用 & 连接分词结果
-            String tokenizedText = String.join(" & ", tokens);
+            String tokenizedText = String.join(" | ", tokens);
             log.debug("分词结果: {} -> {}", query, tokenizedText);
 
             return tokenizedText;
@@ -758,12 +767,12 @@ public class VectorizationService {
      * @param query      查询语句
      * @return 重排后的结果
      */
-    private List<KnowledgeSearchResult> performRerank(List<KnowledgeSearchResult> results, String rerankModel, String query) {
+    private List<KnowledgeSearchResult> performRerank(List<KnowledgeSearchResult> results, String rerankModel, String query, Long userId) {
         try {
             log.info("执行重排功能: rerankModel={}, resultsCount={}", rerankModel, results.size());
             LLMModel llmModel = llmModelService.queryLLMByModel(rerankModel);
             ChatModelStrategy strategy = chatModelStrategyFactory.getStrategy(llmModel.getProviderCode());
-            List<RerankResp> rerankResults = strategy.rerank(llmModel.getModel(), query, results.stream().map(KnowledgeSearchResult::getContent).toList());
+            List<RerankResp> rerankResults = strategy.rerank(llmModel.getModel(), query, results.stream().map(KnowledgeSearchResult::getContent).toList(), userId);
             Map<String, Object> map = new HashMap<>();
             rerankResults.forEach(item-> map.put(item.getRerankContent(),item.getRerankScore()));
             results.forEach(item-> item.setRerankScore((Double) map.get(item.getContent())));

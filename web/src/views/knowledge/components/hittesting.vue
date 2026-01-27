@@ -61,11 +61,26 @@
                             <span v-if="result.rerank_score" style="margin-right: 10px;">结果重排: {{ result.rerank_score.toFixed(4) }}</span>
                             <span>相关度: {{ result.score.toFixed(4) }}</span>
                         </div>
-                        <p class="result-content" v-html="result.highlight"></p>
+                        <div class="result-content">
+                            <div style="font-weight: bold; margin-bottom: 5px; font-size: 14px;" v-if="result.answerType === 'QA'">问：{{ result.qaQuestion }}</div>
+                            <v-md-preview :text="result.answerType === 'QA' ? '答: ' + result.highlight : result.highlight" class="markdown-preview" />
+                        </div>
                         <div class="result-footer">
-                            <img v-if="result.answerType === 'QA'" src="@/assets/images/qa.png" style="width: 18px;" alt="">
-                            <img v-else :src="getFileType(result.filename)" style="width: 18px;" alt="">
-                            <span>{{ result.filename }}</span>
+                            <span v-if="result.answerType === 'QA'" style="display: flex;align-items: center;gap: 5px;">
+                                <img src="@/assets/images/qa.png" style="width: 18px;" alt="" />
+                                <el-breadcrumb :separator-icon="ArrowRight">
+                                    <el-breadcrumb-item><span class="breadcrumb-link">{{ result.knowledgeBaseName || '' }}</span></el-breadcrumb-item>
+                                    <el-breadcrumb-item><span class="breadcrumb-link" style="cursor: pointer;" @click.stop="goToKnowledgeSpace(result)">{{ result.knowledgeSpaceName || '' }}</span></el-breadcrumb-item>
+                                </el-breadcrumb>
+                            </span>
+                            <span v-else style="display: flex;align-items: center;gap: 5px;">
+                                <img :src="getFileType(result.filename)" style="width: 18px;" alt=""> 
+                                <el-breadcrumb :separator-icon="ArrowRight">
+                                    <el-breadcrumb-item><span class="breadcrumb-link">{{ result.knowledgeBaseName || '' }}</span></el-breadcrumb-item>
+                                    <el-breadcrumb-item><span class="breadcrumb-link" style="cursor: pointer;" @click.stop="goToKnowledgeSpace(result)">{{ result.knowledgeSpaceName || '' }}</span></el-breadcrumb-item>
+                                    <el-breadcrumb-item><span class="breadcrumb-link" style="cursor: pointer;" @click.stop="goToFileDetail(result)">{{ result.filename || '' }}</span></el-breadcrumb-item>
+                                </el-breadcrumb> 
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -88,12 +103,27 @@ import {
 } from '@/api/base'
 import notData from '@/assets/images/notData.png'
 import RetrieveConfig from '@/components/RetrieveConfig.vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowRight } from '@element-plus/icons-vue'
 const { proxy } = getCurrentInstance()
 const { rerank_model } = toRefs(proxy?.useDict('rerank_model'));
 import moment from 'moment'
+import VMdPreview from '@kangc/v-md-editor/lib/preview'
+import '@kangc/v-md-editor/lib/style/preview.css'
+import vuepressTheme from '@kangc/v-md-editor/lib/theme/vuepress.js'
+import '@kangc/v-md-editor/lib/theme/style/vuepress.css'
+import Prism from 'prismjs'
+
+// 配置markdown预览器
+VMdPreview.use(vuepressTheme, {
+  Prism,
+})
+
 const route = useRoute()
+const router = useRouter()
 const loading = ref(false)
+
+const emit = defineEmits(['goToKnowledgeSpace'])
 
 const props = defineProps({
     knowFileList: {
@@ -149,7 +179,7 @@ const testResults = ref([])
 const getType = (val) => {
     return typeData.find(item => item.value === val)?.label
 }
-const getFileType = (fileName) => {
+  const getFileType = (fileName) => {
   if (!fileName) return new URL('/src/assets/fileIcon/othe.svg', import.meta.url).href;
   
   // 获取文件扩展名
@@ -166,6 +196,39 @@ const getFileType = (fileName) => {
   } else {
     return new URL('/src/assets/fileIcon/othe.svg', import.meta.url).href;
   }
+}
+
+const goToKnowledgeSpace = (result) => {
+    // 确定要跳转的tab：QA类型为1（问答对），其他为0（知识列表）
+    const tab = result.answerType === 'QA' ? 1 : 0
+    // 通过 emit 通知父组件
+    emit('goToKnowledgeSpace', { tab: tab })
+}
+
+const goToFileDetail = (result) => {
+    // 获取文件ID
+    const fileId = result.document_id || result.id
+    
+    if (!fileId) {
+        ElMessage.warning('文件ID不存在')
+        return
+    }
+    
+    // 获取知识库ID和知识空间ID
+    const knowledgeBaseId = result.knowledgeBaseId || Number(route.query.id)
+    const spaceId = props.knowledgeBaseIds || result.knowledgeSpaceId
+    
+    router.push({
+        path: '/space/retrieve/detail',
+        query: {
+            id: fileId,
+            knowledgeBaseId: knowledgeBaseId,
+            spaceId: spaceId,
+            type: 3,
+            fromHitTesting: 'true',
+            tab: 2  // 命中测试的tab索引
+        }
+    })
 }
 
 const handleResultClick = (result) => {
@@ -209,12 +272,13 @@ const handleSearch = (fromHistory = false) => {
     hitTestQuery(queryParams.value).then(res => {
         testResults.value = res.data
         testResults.value.forEach(item => {
-            // 先将 <em> 标签替换为 <mark>，然后将所有 <mark> 标签替换为带样式的 <span>
-            item.highlight = item.highlight
-                .replace(/<em>/g, '<mark>')
-                .replace(/<\/em>/g, '</mark>')
-                .replace(/<mark>/g, '<span style="color: #447DFB;">')
-                .replace(/<\/mark>/g, '</span>')
+            // 如果 highlight 是 HTML 格式（包含 <em> 标签），转换为 Markdown 格式
+            if (item.highlight && item.highlight.includes('<em>')) {
+                // 将 <em>标签</em> 转换为 **标签** (Markdown 加粗格式，也可以使用高亮语法)
+                item.highlight = item.highlight
+                    .replace(/<em>/g, '**')
+                    .replace(/<\/em>/g, '**')
+            }
         })
         handleHistory()
     }).catch(error => {
@@ -390,10 +454,28 @@ onMounted(() => {
             color: #666;
             line-height: 1.5;
             margin-bottom: 0;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
+            
+            .markdown-preview {
+                :deep(img) {
+                    max-height: 100px;
+                    width: auto;
+                    height: auto;
+                    object-fit: contain;
+                }
+                
+                :deep(.vuepress-markdown-body) {
+                    padding: 0;
+                    font-size: 14px;
+                    color: #666;
+                    
+                    // 限制显示行数（如果需要）
+                    display: -webkit-box;
+                    -webkit-line-clamp: 3;
+                    line-clamp: 3;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                }
+            }
         }
         
         .result-footer {
@@ -401,14 +483,16 @@ onMounted(() => {
             align-items: center;
             gap: 8px;
             margin-top: 10px;
-            // .file-icon {
-            //     color: #52c41a;
-            // }
-            span {
             font-size: 14px;
             font-weight: 700;
+            
+            .breadcrumb-link {
+                cursor: pointer;
+                &:hover {
+                    color: #409eff;
+                }
+            }
         }
-    }
 }
 :deep(.el-rate__icon) {
     font-size: 16px;

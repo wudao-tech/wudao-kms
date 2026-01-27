@@ -8,3 +8,11 @@ export function logicLevelTree(query) {
     params: query
   });
 }
+
+// 获取 Token 使用额度
+export function getTokenQuota() {
+  return request({
+    url: '/api/model/provider/token/quota',
+    method: 'get'
+  });
+}

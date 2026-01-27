@@ -49,4 +49,7 @@ public class Feedback{
     private Boolean optimizationFlag = false;
     @TableField(exist = false)
     private List<Long> ids;
+    @TableField(exist = false)
+    @Schema(description = "QA审核状态（关联qa_improve）：reviewing/pass/reject")
+    private String qaReviewStatus;
 }

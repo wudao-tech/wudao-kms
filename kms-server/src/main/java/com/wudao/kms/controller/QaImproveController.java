@@ -36,8 +36,8 @@ public class QaImproveController {
     }
 
     @GetMapping("/batchPass")
-    public R<Void> batchPass(@RequestParam List<Long> qaIds){
-        return qaImproveService.batchPass(qaIds);
+    public R<Void> batchPass(@RequestParam List<Long> qaIds,@RequestParam String status){
+        return qaImproveService.batchPass(qaIds, status);
     }
 
     @PutMapping

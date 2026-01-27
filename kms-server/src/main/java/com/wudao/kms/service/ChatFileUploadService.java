@@ -139,6 +139,7 @@ public class ChatFileUploadService extends MPJBaseServiceImpl<ChatFileUploadMapp
         boolean success = this.updateById(uploadFile);
         
         if (success) {
+            // TODO: 可以选择同时删除S3中的文件
             log.info("删除文件记录成功，记录ID: {}, 用户ID: {}", fileUploadId, userId);
         }
         

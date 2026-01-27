@@ -5,6 +5,10 @@
     <div class="library-top">
       <span class="page-title"></span>
       <div class="top-controls">
+        <el-select v-model="queryParams.onlyMe" style="width: 150px;" class="filter-select">
+          <el-option label="我创建的" :value="true" />
+          <el-option label="所有" :value="false" />
+        </el-select>
         <el-input 
           v-model="queryParams.name" 
           prefix-icon="Search" 
@@ -104,7 +108,15 @@
    <!-- 上传文件 -->
    <FileUpload v-else-if="type === 4" :uploadType="uploadType" @back="back" :id="detailId" :spaceId="spaceId" />
 
-    <el-dialog v-model="dialogVisible" :title="modelForm.id ? '编辑知识库' : '创建知识库'" width="700px" @close="cancelForm(formRef)">
+    <el-dialog v-model="dialogVisible" :title="modelForm.id ? '编辑知识库' : '创建知识库'" class="create-knowledge-dialog" width="700px" @close="cancelForm(formRef)">
+      <template #header>
+        <div>
+          <span>{{ modelForm.id ? '编辑知识库' : '创建知识库' }}</span>
+          <div style="font-size: 12px;color: #999; font-weight: 400;">
+            提示: 请确保您的内容严格遵守相关法律法规,避免包含任何违法或侵权的内容，请谨慎上传可能涉及敏感信息的资料
+          </div>
+        </div>
+      </template>
       <el-form ref="formRef" :model="modelForm" :rules="rules" label-width="120px">
         <el-form-item label="名称" prop="name">
           <el-input v-model="modelForm.name" />
@@ -256,14 +268,8 @@
         
       </el-form>
       <template #footer>
-        <div style="display: flex; justify-content: space-between">
-          <div style="font-size: 12px;color: #999; text-align: center; margin-left: 100px;">提示: 请确保您的内容严格遵守相关法律法规,避免包含<br/>任何违法或侵权的内容，请谨慎上传可能涉及敏感信息的资料</div>
-          <div>
             <el-button @click="cancelForm(formRef)">取消</el-button>
             <el-button type="primary" @click="submitForm(formRef)">确定</el-button>
-          </div>
-        </div>
-        
       </template>
     </el-dialog>
     <el-dialog v-model="permissionDialogVisible" title="申请权限" width="30%" @close="cancel(permissionFormRef)">
@@ -320,7 +326,7 @@ import {  getModel } from '@/api/retrieve'
 import Permission from './components/permission.vue'
 import Detail from './components/detail.vue'
 import FileUpload from './components/fileUpload.vue'
-import { listUser } from '@/api/system/user'
+import { listUserByDeptId } from '@/api/system/user'
 import { useRouter, useRoute } from 'vue-router'
 const router = useRouter()
 const route = useRoute()
@@ -337,7 +343,7 @@ const spaceId = ref('')
 
 const modelList = ref([])
 // 响应式数据
-const user = ref(null)
+const user = ref({})
 const proxy = getCurrentInstance()
 const userList = ref([])
 const queryParams = ref({
@@ -346,6 +352,7 @@ const queryParams = ref({
   name: '',
   status: null,
   tags: '',
+  onlyMe: true,
 })
 const spaceName = ref('')
 const tags = ref([])
@@ -612,14 +619,19 @@ const handleMoreCommand = (command, row) => {
 }
 const getKnowledgeBaseList = async () => {
   loading.value = true
-  const res = await knowledgeBaseList(queryParams.value)
+  // 如果 createdBy 为 null，则不传递该参数
+  const params = { ...queryParams.value }
+  if (params.onlyMe === false) {
+    delete params.onlyMe
+  }
+  const res = await knowledgeBaseList(params)
   libraries.value = res.data
   total.value = res.total
   loading.value = false
 }
 const getKnowledgeBaseTagList = async () => {
   const res = await knowledgeBaseTagList()
-  dynamicTags.value = res.data
+  dynamicTags.value = res.data.filter(item => item !== '')
   // typeTags.value = res.data.map(item => ({
   //   label: item,
   //   type: false
@@ -627,11 +639,10 @@ const getKnowledgeBaseTagList = async () => {
 }
 
 const getUser = () => {
-  listUser({pageNum: 1, pageSize: 1000}).then(res => {
+  listUserByDeptId().then(res => {
     if (res && res.code === 'ok') {
       userList.value = res.data
     }
-    
   })
 }
 onMounted(async () => {
@@ -648,6 +659,7 @@ onMounted(async () => {
     type.value = 1
   }
   user.value = JSON.parse(localStorage.getItem('userInfo'))
+  queryParams.value.onlyMe = true
   await getKnowledgeBaseList()
   // 如果从路由参数进入，尝试从知识库列表中获取权限类型
   if (id && urlType == 3) {
@@ -864,4 +876,14 @@ onMounted(async () => {
     }
   }
 }
+
+// 在 scoped 样式中也添加，使用 :deep() 穿透
+:deep(.create-knowledge-dialog) {
+  .el-dialog__header {
+    line-height: 22px !important;
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+}
+
 </style>

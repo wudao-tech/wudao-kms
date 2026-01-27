@@ -155,7 +155,6 @@ import { addRole, changeRoleStatus, dataScope, delRole, getRole, listRole, updat
 import { roleMenuTreeselect, treeselect as menuTreeselect } from '@/api/system/menu/index';
 import { RoleVO, RoleForm, RoleQuery, DeptTreeOption } from '@/api/system/role/types';
 import { MenuTreeOption, RoleMenuTree } from '@/api/system/menu/types';
-// import { listUser } from '@/api/system/user';
 
 const router = useRouter();
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;

@@ -106,6 +106,7 @@ public class KnowledgeSearchResult {
 
     private String knowledgeBaseName;
     private String knowledgeSpaceName;
+    private Integer permissionType;
 
     @Data
     @AllArgsConstructor

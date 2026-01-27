@@ -191,34 +191,6 @@ export const dynamicRoutes: RouteRecordRaw[] = [
         meta: { title: '配置管理', activeMenu: '/system/oss', icon: '' }
       }
     ]
-  },
-  {
-    path: '/tool/gen-edit',
-    component: Layout,
-    hidden: true,
-    permissions: ['tool:gen:edit'],
-    children: [
-      {
-        path: 'index/:tableId(\\d+)',
-        component: () => import('@/views/tool/gen/editTable.vue'),
-        name: 'GenEdit',
-        meta: { title: '修改生成配置', activeMenu: '/tool/gen', icon: '', noCache: true }
-      }
-    ]
-  },
-  {
-    path: '/workflow/leaveEdit',
-    component: Layout,
-    hidden: true,
-    permissions: ['workflow:leave:edit'],
-    children: [
-      {
-        path: 'index',
-        component: () => import('@/views/workflow/leave/leaveEdit.vue'),
-        name: 'leaveEdit',
-        meta: { title: '请假申请', activeMenu: '/workflow/leave', noCache: true }
-      }
-    ]
   }
 ];
 

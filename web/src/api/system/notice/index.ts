@@ -18,6 +18,15 @@ export function userReceive(query) {
     params: query
   });
 }
+
+// 消息已读
+export function messageRead(data: any) {
+  return request({
+    url: '/api/user/notice/read',
+    method: 'put',
+    data: data
+  });
+}
 // 查询公告详细
 export function getNotice(noticeId: string | number): AxiosPromise<NoticeVO> {
   return request({

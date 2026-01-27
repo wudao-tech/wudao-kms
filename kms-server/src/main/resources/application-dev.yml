@@ -1,24 +1,36 @@
 env:
-  domain: ${ENV_DOMAIN}
-  database-url: ${ENV_DATABASE_URL}
-  database-username: ${ENV_DATABASE_USERNAME}
-  database-password: ${ENV_DATABASE_PASSWORD}
-  database: ${ENV_DATABASE_NAME}
-  redis-host: ${ENV_REDIS_HOST}
-  redis-port: ${ENV_REDIS_PORT}
-  redis-database: ${ENV_REDIS_DATABASE}
-  redis-password: ${ENV_REDIS_PASSWORD}
-  log-level: ${ENV_LOG_LEVEL}
-  mineru-image: ${ENV_MINERU_IMAGE}
-  docker-bind-path: ${ENV_DOCKER_BIND_PATH}
+  domain: ${DOMAIN:http://localhost:8080}
+  ai-dojo-ip: ${AI_DOJO_IP:127.0.0.1}
+  vectorization-ip: ${VECTORIZATION_IP:127.0.0.1}
+  database-url: ${DATABASE_URL:localhost}
+  database-username: ${DATABASE_USERNAME:postgres}
+  database-password: ${DATABASE_PASSWORD:your-password}
+  database: ${DATABASE_NAME:kms}
+  redis-host: ${REDIS_HOST:localhost}
+  redis-password: ${REDIS_PASSWORD:your-redis-password}
+  segment-url: ${SEGMENT_URL:http://127.0.0.1:8081}
+  log-level: info
+# MinIO OSS 配置示例 (已注释)
+#oss:
+#  endpoint: http://127.0.0.1:9000
+#  access-key: your-access-key
+#  secret-key: your-secret-key
+#  bucket-name: your-bucket
+#  region: cn-hangzhou
+#  path-style-access-enabled: false
+#  static-bucket-name: your-static-bucket
+
+aidojo:
+  api-url: http://127.0.0.1:8084/ai
+  static: https://aidojo.wudao-tech.com/static
 oss:
-  endpoint: ${OSS_ENDPOINT}
-  access-key: ${OSS_ACCESS_KEY}
-  secret-key: ${OSS_SECRET_KEY}
-  bucket-name: ${OSS_BUCKET_NAME}
-  region: ${OSS_REGION}
-  path-style-access-enabled: ${OSS_PATH_STYLE_ACCESS_ENABLED}
-  static-bucket-name: ${OSS_STATIC_BUCKET_NAME}
+  endpoint: https://oss-cn-hangzhou.aliyuncs.com
+  access-key: ${OSS_ACCESS_KEY:your-access-key}
+  secret-key: ${OSS_SECRET_KEY:your-secret-key}
+  bucket-name: ${OSS_BUCKET_NAME:your-bucket-name}
+  region: cn-hangzhou
+  path-style-access-enabled: false
+  static-bucket-name: oss-kms-static-uat-bucket-hangzhou
 justauth:
   cache:
     prefix: 'local::'

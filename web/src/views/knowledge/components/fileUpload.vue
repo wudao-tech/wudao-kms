@@ -333,7 +333,7 @@
         </div>
 
         <!-- 分段编辑步骤 -->
-        <div v-if="currentStep === 2" class="edit-step" v-loading="sseLoading" element-loading-text="文件正在解析，请勿离开">
+        <div v-if="currentStep === 2" class="edit-step">
           <div class="edit-step-left">
             <div style="font-size: 16px;margin-bottom: 10px; font-weight: 700">文件列表</div>
             <!-- <div style="color: #999999;margin-bottom: 10px;">文档列表</div> -->
@@ -364,26 +364,27 @@
           </div>
 
           <div class="edit-step-right" style="margin-left: 5px;">
-            <!-- <div style="padding: 0 20px 10px 20px; border-bottom: 1px solid #ddd; background: white;"> -->
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 20px; padding-top: 10px;">
-                <span style="margin-bottom: 10px; font-size: 16px; font-weight: 700;">解析后文档内容</span>
-                <div>
-                  <span v-if="segmentCount > 0" style="font-size: 14px; color: #606266;">{{ segmentCount }} 段落</span>
-                  <!-- <el-button size="small" link @click="exportParsedContent">导出内容</el-button> -->
-                  <!-- <el-button size="small" link @click="refreshParsedContent">刷新</el-button> -->
-                </div>
+           
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 20px; padding-top: 10px;">
+              <span style="margin-bottom: 10px; font-size: 16px; font-weight: 700;">解析后文档内容</span>
+              <div>
+                <span v-if="segmentCount > 0" style="font-size: 14px; color: #606266;">{{ segmentCount }} 段落</span>
+               
               </div>
-            <!-- </div> -->
+            </div>
             
-            <div class="parsed-content-container" style="height: calc(100% - 41px); overflow-y: auto; background: #f8f9fa;">
-              <!-- 解析后md文件展示 -->
+            <div class="parsed-content-container" style="height: calc(100% - 41px); overflow-y: auto; background: #f8f9fa;" v-loading="sseLoading" element-loading-text="文件正在解析，请勿离开">
               <parseMd 
+                v-if="sseCompleted"
                 ref="parseMdRef"
                 :knowledgeBaseId="tempFileData.knowledgeBaseId" 
                 :knowledgeSpaceId="tempFileData.knowledgeSpaceId" 
                 :fileMd5="currentFile.fileMd5"
-                :sseCompleted="!sseLoading"
+                :sseCompleted="sseCompleted"
               />
+              <div v-else style="display: flex; justify-content: center; align-items: center; height: 100%;">
+                <el-button link icon="Pointer" style="font-size: 24px;" @click="sseAnalysis">预览</el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -436,7 +437,7 @@ import {
   getTempFileBySegment,
   uploadFileReturn, 
   deleteTempFile,
-urlBatchDownload,
+  urlBatchDownload,
   onlineCreate,
   uploadFileImage
 } from '@/api/base'
@@ -631,6 +632,8 @@ const fileList = ref([])
 const currentFileId = ref(null)
 
 const sseLoading = ref(false)
+const sseCompleted = ref(false) // SSE是否已完成
+const processedFileMd5List = ref([]) // 已处理过的文件MD5列表（缓存）
 
 const segmentMethods = ref([ {
   name: '双换行', 
@@ -758,23 +761,25 @@ const httpRequestInternal = async (options) => {
       throw new Error('找不到文件记录')
     }
     
-    // 更新状态为"计算MD5..."
-    tempFileData.value.knowledgeFileUploadTempDTOList[tempRecordIndex].parseResult = '计算MD5...'
+    // 从记录中获取已计算的MD5（在httpRequest中已经计算过了）
+    let fileMd5 = tempFileData.value.knowledgeFileUploadTempDTOList[tempRecordIndex].fileMd5
     
-    // 计算文件MD5
-    const fileMd5 = await calculateFileMD5(file)
+    // 如果记录中没有MD5（兜底情况），则计算
+    if (!fileMd5) {
+      // 更新状态为"计算MD5..."
+      tempFileData.value.knowledgeFileUploadTempDTOList[tempRecordIndex].parseResult = '计算MD5...'
+      fileMd5 = await calculateFileMD5(file)
+      // 更新MD5到记录中
+      tempFileData.value.knowledgeFileUploadTempDTOList[tempRecordIndex].fileMd5 = fileMd5
+    }
     
-    // 更新MD5到记录中
-    tempFileData.value.knowledgeFileUploadTempDTOList[tempRecordIndex].fileMd5 = fileMd5
-    
-    // 检查文件是否已上传过（通过MD5判断，但排除当前记录）
+    // 再次检查文件是否已上传过（作为兜底检查，但排除当前记录）
     const existingFile = tempFileData.value.knowledgeFileUploadTempDTOList.find(
       f => f.fileMd5 === fileMd5 && f.id !== tempRecordId && f.localSourcePath
     )
     if (existingFile) {
-      // 更新当前记录状态为失败
-      tempFileData.value.knowledgeFileUploadTempDTOList[tempRecordIndex].parseResult = '文件重复'
-      tempFileData.value.knowledgeFileUploadTempDTOList[tempRecordIndex].progress = 0
+      // 如果检测到重复，从列表中移除当前记录
+      tempFileData.value.knowledgeFileUploadTempDTOList.splice(tempRecordIndex, 1)
       
       ElMessage.warning(`文件 "${file.name}" 已上传过，请勿重复上传`)
       if (onError) {
@@ -924,37 +929,62 @@ const httpRequestInternal = async (options) => {
 // 自定义上传方法 - 入口函数，负责队列管理
 const httpRequest = async (options) => {
   const { file } = options
+  console.log(123, file)
   
-  // 立即将文件添加到列表显示，状态为"等待上传"
-  const tempFileRecord = {
-    fileName: file.name,
-    fileSize: file.size,
-    parseResult: '等待上传',
-    summary: '',
-    tags: '',
-    id: file.uid || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    progress: 0,
-    fileMd5: '', // MD5 将在实际上传时计算
-    localSourcePath: '',
-    createType: 'UPLOAD'
+  // 先计算文件MD5，检查是否重复
+  try {
+    const fileMd5 = await calculateFileMD5(file)
+    
+    // 检查文件是否已上传过（通过MD5判断，且已有localSourcePath表示已上传成功）
+    const existingFile = tempFileData.value.knowledgeFileUploadTempDTOList.find(
+      f => f.fileMd5 === fileMd5 && f.localSourcePath
+    )
+    
+    if (existingFile) {
+      ElMessage.warning(`文件 "${file.name}" 已上传过，请勿重复上传`)
+      if (options.onError) {
+        options.onError(new Error('文件已上传过'), file)
+      }
+      return // 直接返回，不添加到列表
+    }
+    
+    // 文件不重复，创建临时记录并添加到列表
+    const tempFileRecord = {
+      fileName: file.name,
+      fileSize: file.size,
+      parseResult: '等待上传',
+      summary: '',
+      tags: '',
+      id: file.uid || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      progress: 0,
+      fileMd5: fileMd5, // 已经计算好的MD5
+      localSourcePath: '',
+      createType: 'UPLOAD'
+    }
+    
+    // 添加到列表显示
+    tempFileData.value.knowledgeFileUploadTempDTOList.push(tempFileRecord)
+    
+    // 将文件和临时记录ID都存入队列
+    uploadQueue.value.push({
+      ...options,
+      tempRecordId: tempFileRecord.id
+    })
+    
+    // 如果当前没有在上传，开始处理队列
+    if (!isUploading.value) {
+      isUploading.value = true
+      tableLoading.value = true
+      await processNextUpload()
+    }
+    // 如果正在上传，文件已经在队列中，等待处理
+  } catch (error) {
+    // MD5计算失败或其他错误
+    ElMessage.error(`文件 "${file.name}" 处理失败: ${error.message}`)
+    if (options.onError) {
+      options.onError(error, file)
+    }
   }
-  
-  // 立即显示在列表中
-  tempFileData.value.knowledgeFileUploadTempDTOList.push(tempFileRecord)
-  
-  // 将文件和临时记录ID都存入队列
-  uploadQueue.value.push({
-    ...options,
-    tempRecordId: tempFileRecord.id
-  })
-  
-  // 如果当前没有在上传，开始处理队列
-  if (!isUploading.value) {
-    isUploading.value = true
-    tableLoading.value = true
-    await processNextUpload()
-  }
-  // 如果正在上传，文件已经在队列中，等待处理
 }
 
 const createTempFilefn = () => {
@@ -1213,7 +1243,7 @@ const getFilteredSegmentConfig = () => {
     vlFlag: config.value.vlFlag,
     // generateTitleIndex: config.value.generateTitleIndex,
     pdfIncrease: config.value.pdfIncrease,
-    extraChangeFlag: config.value.extraChangeFlag
+    extraChangeFlag: true
   }
 
   if (config.value.segmentMethod === 'normal') {
@@ -1240,13 +1270,7 @@ const getFilteredSegmentConfig = () => {
   return baseConfig
 }
 
-// 监听pdfIncrease变化
-watch(() => config.value.pdfIncrease, (newValue, oldValue) => {
-  if (lastPdfIncrease.value !== null && newValue !== lastPdfIncrease.value) {
-    // pdfIncrease发生了变化，设置extraChangeFlag为true
-    config.value.extraChangeFlag = true
-  }
-})
+// 监听pdfIncrease变化（已移除extraChangeFlag相关逻辑，默认始终为true）
 
 // 监听segmentMethod变化，实时过滤配置
 watch(() => config.value.segmentMethod, (newMethod, oldMethod) => {
@@ -1298,13 +1322,15 @@ watch(() => config.value.segmentType, (newType, oldType) => {
 // 注意：不需要监听配置变化来清除本地存储
 // 原因：
 // 1. 文件列表变化时已经会清除配置（见下方的文件列表监听器）
-// 2. nextStep 中会自动比较配置变化并正确设置 extraChangeFlag
+// 2. nextStep 中会自动比较配置变化并判断是否需要重新处理
 // 3. 过于激进的监听器会误清除刚保存的配置
 // 
 // 如果用户手动修改配置后再点击下一步：
 // - nextStep 会检测到配置与本地存储不同
-// - 自动设置 extraChangeFlag = true 并重新处理
+// - 判断需要重新处理并触发处理流程
 // - 处理完成后保存新配置作为下次的基准
+// 
+// 注意：extraChangeFlag 始终为 true，不再进行判断
 
 // 监听文件列表变化
 watch(() => tempFileData.value.knowledgeFileUploadTempDTOList, (newFileList, oldFileList) => {
@@ -1352,10 +1378,7 @@ watch(() => tempFileData.value.knowledgeFileUploadTempDTOList, (newFileList, old
 
 const nextStep = async () => {
   if (currentStep.value === 1) { 
-    // 从本地存储读取上次的配置
     const savedData = getConfigFromStorage()
-    // 创建一个只包含 defaultConfig 定义字段的配置副本用于比较
-    // 避免后端返回的额外字段（如 generateTitleIndex、overlap）影响比较结果
     const configForCompare = {
       segmentMethod: config.value.segmentMethod,
       splitMethod: config.value.splitMethod,
@@ -1378,7 +1401,6 @@ const nextStep = async () => {
     }))
     const currentFileListStr = JSON.stringify(currentFileList)
     
-    // 检查配置是否有变化（排除 extraChangeFlag 字段）
     let configChanged = true
     if (savedData) {
       const savedConfigStr = JSON.stringify(savedData.config)
@@ -1386,110 +1408,29 @@ const nextStep = async () => {
       configChanged = savedConfigStr !== currentConfigStr || savedFileListStr !== currentFileListStr
     }
     
-    // 如果配置有任何变化，设置 extraChangeFlag 为 true；否则为 false
-    if (configChanged) {
-      config.value.extraChangeFlag = true
-    } else {
-      config.value.extraChangeFlag = false
-    }
+    config.value.extraChangeFlag = true
     
-    // 判断是否需要重新处理
     const needReprocess = configChanged || 
                          !tempFileData.value.knowledgeFileUploadTempDTOList.some(file => file.segmentedDocPath)
     
-    // 在进入第三步之前立即保存配置（无论是否需要重新处理）
-    // 这样可以确保第一次进入时也能保存，作为下次比较的基准
     saveConfigToStorage(config.value, currentFileList)
     
     if (needReprocess) {
-      // 使用过滤后的配置
       tempFileData.value.knowLedgeSegmentConfig = getFilteredSegmentConfig()
-      let res = await createTempFile(tempFileData.value)
-      sseLoading.value = true
-       // 发布订阅模式 SSE 连接
-       if (res.code === 'ok') {
-         try {
-           // 生成5位随机数作为userId
-           const randomUserId = Math.floor(10000 + Math.random() * 90000)
-           
-           // 第一步：建立 SSE 通道
-           eventSource.value = new EventSourcePolyfill(import.meta.env.VITE_APP_BASE_API + `/api/sse/connect?userId=${randomUserId}`, {
-             headers: {
-               'Authorization': 'Bearer ' + getToken(),
-               'Accept': 'text/event-stream',
-               'Cache-Control': 'no-cache'
-             }
-           })
-           
-           // 第二步：订阅文件处理事件
-           const subscribeResponse = await fetch(import.meta.env.VITE_APP_BASE_API + `/api/knowledge-file-segment/process_segment/${props.id}/${props.spaceId}/${randomUserId}`, {
-             method: 'get',
-             headers: {
-               'Authorization': 'Bearer ' + getToken(),
-               'Content-Type': 'application/json'
-             }
-           })
-          // 监听消息事件
-          eventSource.value.addEventListener('process-document', (event) => {
-            let datas =  JSON.parse(event.data)
-            // 如果进度是100了就关闭sse连接
-            if (datas.fileProgress === 100) {
-              eventSource.value.close()
-              // 关闭sse连接后，获取文件分段数据
-              ElMessage.success('所有文件分段处理成功')
-              sseLoading.value = false
-              
-              // 获取最新数据并自动选择第一个文件
-              getTempFileData(props.id, props.spaceId).then(() => {
-                // 数据更新后，自动选择第一个文件进行预览
-                if (tempFileData.value.knowledgeFileUploadTempDTOList.length > 0) {
-                  nextTick(() => {
-                    handleFileClick(tempFileData.value.knowledgeFileUploadTempDTOList[0], 0)
-                  })
-                }
-              })
-            }
-          })
-          // 监听连接打开事件
-          eventSource.value.addEventListener('open', (event) => {
-            // ElMessage.success('开始处理文件分段...')
-          })
-          // 监听错误事件
-          eventSource.value.addEventListener('error', (event) => {
-            ElMessage.error('文件处理连接失败')
-            sseLoading.value = false
-            eventSource.value.close()
-          })
-          // 监听连接关闭事件
-          eventSource.value.addEventListener('close', (event) => {
-          })
-          
-        } catch (error) {
-          ElMessage.error('无法建立文件处理连接')
-          sseLoading.value = false
-        }
-      } else {
-        sseLoading.value = false
-      }
-    } else {
-      // 没有变化，直接使用现有数据
-      // ElMessage.info('配置和文件未发生变化，使用现有分段数据')
+      await createTempFile(tempFileData.value)
     }
   }
   
   if (currentStep.value < 2) {
     currentStep.value++
     
-    // 如果进入分段编辑步骤且已有处理过的文件，恢复之前的选择
     if (currentStep.value === 2 && tempFileData.value.knowledgeFileUploadTempDTOList.length > 0) {
-      // 如果之前有选择的文件，恢复选择状态
       if (currentFileId.value !== null && tempFileData.value.knowledgeFileUploadTempDTOList[currentFileId.value]) {
         const file = tempFileData.value.knowledgeFileUploadTempDTOList[currentFileId.value]
         nextTick(() => {
           handleFileClick(file, currentFileId.value)
         })
       } else if (!currentFile.value.fileName && tempFileData.value.knowledgeFileUploadTempDTOList[0]) {
-        // 如果没有之前的选择，默认选择第一个文件
         nextTick(() => {
           handleFileClick(tempFileData.value.knowledgeFileUploadTempDTOList[0], 0)
         })
@@ -1498,9 +1439,119 @@ const nextStep = async () => {
   }
 }
 
+const sseAnalysis = async () => {
+  if (!currentFile.value || !currentFile.value.fileMd5) {
+    ElMessage.warning('请先选择文件')
+    return
+  }
+  
+  const fileMd5 = currentFile.value.fileMd5
+  
+  // 检查是否已经处理过这个文件
+  if (processedFileMd5List.value.includes(fileMd5)) {
+    // 如果已经处理过，直接显示 parseMd
+    sseCompleted.value = true
+    return
+  }
+  
+  // extraChangeFlag 始终为 true
+  config.value.extraChangeFlag = true
+  
+  // 每次点击预览都重新触发SSE，不检查配置变化
+  // 使用过滤后的配置
+  tempFileData.value.knowLedgeSegmentConfig = getFilteredSegmentConfig()
+  let res = await createTempFile(tempFileData.value)
+  
+  if (res.code === 'ok') {
+    try {
+      sseLoading.value = true
+      sseCompleted.value = false
+      
+      // 生成5位随机数作为userId
+      const randomUserId = Math.floor(10000 + Math.random() * 90000)
+      
+      // 第一步：建立 SSE 通道
+      eventSource.value = new EventSourcePolyfill(import.meta.env.VITE_APP_BASE_API + `/api/sse/connect?userId=${randomUserId}`, {
+        headers: {
+          'Authorization': 'Bearer ' + getToken(),
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache'
+        }
+      })
+      
+      // 第二步：订阅文件处理事件
+      const subscribeResponse = await fetch(import.meta.env.VITE_APP_BASE_API + `/api/knowledge-file-segment/process_segment/${props.id}/${props.spaceId}/${randomUserId}/${fileMd5}`, {
+        method: 'get',
+        headers: {
+          'Authorization': 'Bearer ' + getToken(),
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      // 监听消息事件
+      eventSource.value.addEventListener('process-document', (event) => {
+        let datas = JSON.parse(event.data)
+        // 如果进度是100了就关闭sse连接
+        if (datas.fileProgress === 100) {
+          eventSource.value.close()
+          // 关闭sse连接后，获取文件分段数据
+          ElMessage.success('所有文件分段处理成功')
+          sseLoading.value = false
+          sseCompleted.value = true
+          // 将 fileMd5 添加到已处理列表
+          if (!processedFileMd5List.value.includes(fileMd5)) {
+            processedFileMd5List.value.push(fileMd5)
+          }
+          // 获取最新数据
+          getTempFileData(props.id, props.spaceId).then(() => {
+            // 数据更新后，重新选择当前文件
+            const currentIndex = tempFileData.value.knowledgeFileUploadTempDTOList.findIndex(f => f.fileMd5 === fileMd5)
+            if (currentIndex !== -1) {
+              nextTick(() => {
+                // 从 SSE 回调中恢复当前文件时，不要重置 sseCompleted
+                handleFileClick(tempFileData.value.knowledgeFileUploadTempDTOList[currentIndex], currentIndex, true)
+              })
+            }
+          })
+        }
+      })
+      
+      // 监听连接打开事件
+      eventSource.value.addEventListener('open', (event) => {
+        // ElMessage.success('开始处理文件分段...')
+      })
+      
+      // 监听错误事件
+      eventSource.value.addEventListener('error', (event) => {
+        ElMessage.error('文件处理连接失败')
+        sseLoading.value = false
+        sseCompleted.value = false
+        if (eventSource.value) {
+          eventSource.value.close()
+          eventSource.value = null
+        }
+      })
+      
+      // 监听连接关闭事件
+      eventSource.value.addEventListener('close', (event) => {
+      })
+      
+    } catch (error) {
+      ElMessage.error('无法建立文件处理连接')
+      sseLoading.value = false
+      sseCompleted.value = false
+    }
+  } else {
+    sseLoading.value = false
+    sseCompleted.value = false
+  }
+}
+
 const prevStep = () => {
   if (currentStep.value > 0) {
     currentStep.value--
+    // 清空已处理文件MD5列表
+    processedFileMd5List.value = []
   }
 }
 
@@ -1571,17 +1622,23 @@ const viewOriginalFile = () => {
   }
 }
 
-const handleFileClick = (item, index) => {
+const handleFileClick = (item, index, fromSse = false) => {
   try {   
-    // 更新选中状态
     currentFileId.value = index
     currentFile.value = item
-    
     // 构建文件URL
     const fileUrl = url + item.localSourcePath.replace('uploadPath/', 'profile/')
-    
-    // 设置原始文件URL，FilePreview 组件会自动处理预览
     originalFile.value = fileUrl
+    if (!fromSse) {
+      // 检查该文件是否已经处理过
+      if (item.fileMd5 && processedFileMd5List.value.includes(item.fileMd5)) {
+        // 如果已经处理过，直接显示解析后的内容
+        sseCompleted.value = true
+      } else {
+        // 如果未处理过，显示预览按钮
+        sseCompleted.value = false
+      }
+    }
   } catch (error) {
     console.error('文件点击处理错误:', error)
   }
@@ -1820,7 +1877,7 @@ const beforeUpload = (file) => {
   // 检查文件大小（单个文件最多20MB）
   const isLt20M = file.size / 1024 / 1024 < 20
   if (!isLt20M) {
-    ElMessage.error('上传文件大小不能超过 20MB！')
+    ElMessage.error('上传文件大小不能超过20MB！')
     return false
   }
   

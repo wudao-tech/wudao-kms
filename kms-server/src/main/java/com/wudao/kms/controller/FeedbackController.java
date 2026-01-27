@@ -68,7 +68,7 @@ public class FeedbackController {
     }
 
     @PostMapping("export")
-    public void exportData(@ParameterObject Feedback feedback, HttpServletResponse response) throws Exception {
+    public void exportData(@RequestBody Feedback feedback, HttpServletResponse response) throws Exception {
         feedbackService.exportData(feedback, response);
     }
 }

@@ -56,7 +56,7 @@ public interface ChatModelStrategy {
      * @param mediaList 图片文件
      * @return 返回解释的内容
      */
-    String vl(String model, String prompt, List<Media> mediaList);
+    String vl(String model, String prompt, List<Media> mediaList, Long userId);
 
     /**
      * 判断是否支持指定的模型
@@ -70,9 +70,10 @@ public interface ChatModelStrategy {
      * 向量化
      * @param model 向量模型
      * @param contents 向量内容
+     * @param userId 用户ID，用于记录token使用
      * @return 返回1024维度内容
      */
-    List<float[]> embedding(String model ,List<String> contents);
+    List<float[]> embedding(String model, List<String> contents, Long userId);
 
     /**
      * 简单对话
@@ -98,9 +99,10 @@ public interface ChatModelStrategy {
      * @param model 模型
      * @param question 问题
      * @param answer 答案
+     * @param userId 用户ID，用于配额检查和记录
      * @return 重排后的结果
      */
-    List<RerankResp> rerank(String model, String question, List<String> answer);
+    List<RerankResp> rerank(String model, String question, List<String> answer, Long userId);
 
     /**
      * 音频转中文
