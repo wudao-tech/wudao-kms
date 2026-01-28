@@ -161,18 +161,3 @@ pai:
     region: cn-hangzhou
     endpoint: pai-dlc.cn-hangzhou.aliyuncs.com
     oss-prefix: oss://your-bucket.oss-cn-hangzhou-internal.aliyuncs.com/
-# oauth
-justauth:
-  enabled: true
-  cache:
-    type: default
-    prefix: 'local::'
-    timeout: 1h
-  extend:
-    enum-class: com.wudao.security.model.WdAuthSource
-    config:
-      WUDAO:
-        request-class: com.wudao.security.model.AuthWudaoRequest
-        client-id: ${OAUTH_CLIENT_ID:kms}
-        client-secret: ${OAUTH_CLIENT_SECRET:your-client-secret}
-        redirect-uri: ${env.domain}/kms/callback?source=wudao

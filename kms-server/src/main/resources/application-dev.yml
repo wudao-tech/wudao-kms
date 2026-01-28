@@ -31,11 +31,3 @@ oss:
   region: cn-hangzhou
   path-style-access-enabled: false
   static-bucket-name: oss-kms-static-uat-bucket-hangzhou
-justauth:
-  cache:
-    prefix: 'local::'
-  extend:
-    enum-class: com.wudao.security.model.WdUatAuthSource
-    config:
-      WUDAO:
-        redirect-uri: ${env.domain}/kms/callback?source=wudao
